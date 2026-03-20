@@ -1,98 +1,121 @@
-// State
+import { encodeHeader, decodeHeader, HEADER_SIZE } from './header'
+import { getMimeFromId, getExtFromId } from './mime'
+
 let _writerReady = false
 let _readerReady = false
-let _capturedOutput = ''
+let _output      = ''
+let _encCnt      = 0
+let _decCnt      = 0
+
+// We prefix every frame with "CF1:" then base64 the rest.
+// base64 sidesteps null-byte issues when passing binary through jabcode's --input.
+const MAGIC = 'CF1:'
+
+const b64enc = (bytes) => {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
+  return btoa(s)
+}
+
+const b64dec = (str) => {
+  const s   = atob(str)
+  const out = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i)
+  return out
+}
+
+// Build the string that goes into jabcodeWriter --input
+export function buildFrame({ mode, totalCodes, codeIndex, chunkBytes, mimeTypeId }) {
+  const hdr   = encodeHeader({ mode, totalCodes, codeIndex, chunkLength: chunkBytes.length, mimeTypeId })
+  const frame = new Uint8Array(HEADER_SIZE + chunkBytes.length)
+  frame.set(hdr, 0)
+  frame.set(chunkBytes, HEADER_SIZE)
+  return MAGIC + b64enc(frame)
+}
+
+// Parse the string that comes out of jabcodeReader
+export function parseFrame(raw) {
+  if (!raw?.startsWith(MAGIC)) return null
+
+  let bytes
+  try { bytes = b64dec(raw.slice(MAGIC.length)) } catch { return null }
+  if (bytes.length < HEADER_SIZE) return null
+
+  let hdr
+  try { hdr = decodeHeader(bytes) } catch { return null }
+
+  const payload = bytes.slice(HEADER_SIZE, HEADER_SIZE + hdr.chunkLength)
+  return { ...hdr, payload, mime: getMimeFromId(hdr.mimeTypeId), ext: getExtFromId(hdr.mimeTypeId) }
+}
 
 // Writer
+
 export function loadWriter() {
   if (_writerReady) return Promise.resolve()
 
   return new Promise((resolve, reject) => {
     window.Module = {
-      print: (text) => { console.log('[jabcodeWriter]', text) },
-      printErr: (text) => { console.warn('[jabcodeWriter err]', text) },
-      onRuntimeInitialized: () => {
-        _writerReady = true
-        resolve()
-      }
+      print:    (t) => console.log('[writer]', t),
+      printErr: (t) => console.warn('[writer err]', t),
+      onRuntimeInitialized() { _writerReady = true; resolve() },
     }
-
-    const script = document.createElement('script')
-    script.src = '/assets/jabcodeWriter.js'
-    script.onerror = () => reject(new Error('Failed to load jabcodeWriter.js'))
-    document.head.appendChild(script)
+    const s   = document.createElement('script')
+    s.src     = '/assets/jabcodeWriter.js'
+    s.onerror = () => reject(new Error('Failed to load jabcodeWriter.js'))
+    document.head.appendChild(s)
   })
 }
 
-// Encode one chunk → PNG bytes
-let _encodeCounter = 0
+export function encodeFrame(frameStr, opts = {}) {
+  if (!_writerReady) throw new Error('Writer not ready')
 
-export function encodeChunk(frameString, opts = {}) {
-  if (!_writerReady) throw new Error('Writer WASM not loaded')
-
-  _encodeCounter++
-  const outName = `_cf_out_${_encodeCounter}.png`
-
-  const args = ['--input', frameString, '--output', outName]
+  _encCnt++
+  const out  = `_w${_encCnt}.png`
+  const args = ['--input', frameStr, '--output', out]
 
   if (opts.colorNumber) args.push('--color-number', String(opts.colorNumber))
   if (opts.moduleSize)  args.push('--module-size',  String(opts.moduleSize))
-  if (opts.symbolWidth  > 0) args.push('--symbol-width',  String(opts.symbolWidth))
-  if (opts.symbolHeight > 0) args.push('--symbol-height', String(opts.symbolHeight))
+  if ((opts.symbolWidth  ?? 0) > 0) args.push('--symbol-width',  String(opts.symbolWidth))
+  if ((opts.symbolHeight ?? 0) > 0) args.push('--symbol-height', String(opts.symbolHeight))
   if (opts.eccLevel)    args.push('--ecc-level',    String(opts.eccLevel))
 
   window.callMain(args)
 
-  const pngData = window.FS.readFile(outName)
-  window.FS.unlink(outName)
-
-  return pngData  // Uint8Array
+  const png = window.FS.readFile(out)
+  window.FS.unlink(out)
+  return png
 }
 
 // Reader
+
 export function loadReader() {
   if (_readerReady) return Promise.resolve()
 
   return new Promise((resolve, reject) => {
     window.Module = {
-      print: (text) => {
-        _capturedOutput += (_capturedOutput ? '\n' : '') + text
-      },
-      printErr: (text) => { console.warn('[jabcodeReader err]', text) },
-      onRuntimeInitialized: () => {
-        _readerReady = true
-        resolve()
-      }
+      print(t) { _output += (_output ? '\n' : '') + t },
+      printErr: (t) => console.warn('[reader err]', t),
+      onRuntimeInitialized() { _readerReady = true; resolve() },
     }
-
-    const script = document.createElement('script')
-    script.src = '/assets/jabcodeReader.js'
-    script.onerror = () => reject(new Error('Failed to load jabcodeReader.js'))
-    document.head.appendChild(script)
+    const s   = document.createElement('script')
+    s.src     = '/assets/jabcodeReader.js'
+    s.onerror = () => reject(new Error('Failed to load jabcodeReader.js'))
+    document.head.appendChild(s)
   })
 }
 
-// Decode one PNG → raw output string
-let _scanCounter = 0
-
 export function decodeImage(pngData) {
-  if (!_readerReady) throw new Error('Reader WASM not loaded')
+  if (!_readerReady) throw new Error('Reader not ready')
 
-  _scanCounter++
-  const fsName = `_scan_${_scanCounter}.png`
+  _decCnt++
+  const name = `_r${_decCnt}.png`
+  window.FS.writeFile(name, pngData)
+  _output = ''
 
-  window.FS.writeFile(fsName, pngData)
-  _capturedOutput = ''
+  try { window.callMain([name]) } catch (_) { /* miss — no code in frame */ }
 
-  try {
-    window.callMain([fsName])
-  } catch (_) {
-    // decode miss — normal for frames without a valid JABCode
-  }
+  window.FS.unlink(name)
 
-  window.FS.unlink(fsName)
-
-  // Return the last non-empty line of output
-  const lines = _capturedOutput.trim().split('\n')
-  return lines[lines.length - 1] ?? ''
+  const lines = _output.trim().split('\n').filter(Boolean)
+  return lines.at(-1) ?? ''
 }
