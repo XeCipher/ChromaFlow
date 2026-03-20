@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import JSZip from 'jszip'
+import GIF from 'gif.js'
 import Navbar from '../components/shared/Navbar'
 import FileDropZone from '../components/Writer/FileDropZone'
 import SettingsPanel from '../components/Writer/SettingsPanel'
+import GifPlayer from '../components/Writer/GifPlayer'
 import { loadWriter, encodeFrame, buildFrame } from '../core/jabcode'
 import { chunkBytes } from '../core/chunker'
 import { getIdFromFilename } from '../core/mime'
@@ -28,16 +30,22 @@ function Stat({ label, value }) {
 }
 
 export default function WriterPage() {
-  const [inputMode, setInputMode]   = useState('text')
-  const [text, setText]             = useState('')
-  const [file, setFile]             = useState(null)
-  const [settings, setSettings]     = useState(DEFAULTS)
-  const [wasmReady, setWasmReady]   = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const [progress, setProgress]     = useState({ cur: 0, total: 0 })
-  const [codes, setCodes]           = useState([])
-  const [rawPngs, setRawPngs]       = useState([])
-  const [error, setError]           = useState('')
+  const [inputMode, setInputMode]     = useState('text')
+  const [text, setText]               = useState('')
+  const [file, setFile]               = useState(null)
+  const [settings, setSettings]       = useState(DEFAULTS)
+  const [wasmReady, setWasmReady]     = useState(false)
+  const [generating, setGenerating]   = useState(false)
+  const [progress, setProgress]       = useState({ cur: 0, total: 0 })
+  const [codes, setCodes]             = useState([])
+  const [rawPngs, setRawPngs]         = useState([])
+  const [error, setError]             = useState('')
+
+  // GIF state
+  const [gifBuilding, setGifBuilding] = useState(false)
+  const [gifProgress, setGifProgress] = useState(0)
+  const [gifUrl, setGifUrl]           = useState(null)
+  const [showPlayer, setShowPlayer]   = useState(false)
 
   useEffect(() => {
     loadWriter()
@@ -51,6 +59,7 @@ export default function WriterPage() {
     setError('')
     setCodes([])
     setRawPngs([])
+    setGifUrl(null)
 
     let payload, mimeId, frameMode
 
@@ -95,7 +104,7 @@ export default function WriterPage() {
           eccLevel:    settings.eccLevel,
         })
       } catch (e) {
-        setError(`Frame ${i + 1} failed: ${e.message}. Try reducing the chunk size.`)
+        setError(`Frame ${i + 1} failed: ${e.message}. Try reducing chunk size.`)
         setGenerating(false)
         return
       }
@@ -122,11 +131,83 @@ export default function WriterPage() {
     a.click()
   }
 
+  const buildGif = async () => {
+    if (gifBuilding || rawPngs.length === 0) return
+
+    // If already built, just show the player
+    if (gifUrl) { setShowPlayer(true); return }
+
+    setGifBuilding(true)
+    setGifProgress(0)
+
+    // Load all PNGs as ImageBitmaps to get real pixel dimensions
+    const bitmaps = await Promise.all(
+      rawPngs.map(png => {
+        const blob = new Blob([png], { type: 'image/png' })
+        return createImageBitmap(blob)
+      })
+    )
+
+    const w = bitmaps[0].width
+    const h = bitmaps[0].height
+
+    // Fetch gif.js worker and turn into a same-origin blob URL
+    // (browsers block cross-origin workers)
+    const workerResp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
+    const workerText = await workerResp.text()
+    const workerBlob = new Blob([workerText], { type: 'application/javascript' })
+    const workerUrl  = URL.createObjectURL(workerBlob)
+
+    const gif = new GIF({
+      workers:      2,
+      quality:      5,
+      width:        w,
+      height:       h,
+      workerScript: workerUrl,
+    })
+
+    // Draw each frame onto a canvas and add to GIF
+    const canvas = document.createElement('canvas')
+    canvas.width  = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+
+    const delay = Math.round(1000 / animFps)
+
+    for (const bmp of bitmaps) {
+      ctx.clearRect(0, 0, w, h)
+      ctx.drawImage(bmp, 0, 0)
+      gif.addFrame(canvas, { copy: true, delay })
+    }
+
+    gif.on('progress', (p) => setGifProgress(Math.round(p * 100)))
+
+    gif.on('finished', (blob) => {
+      URL.revokeObjectURL(workerUrl)
+      const url = URL.createObjectURL(blob)
+      setGifUrl(url)
+      setGifBuilding(false)
+      setGifProgress(0)
+      setShowPlayer(true)
+    })
+
+    gif.render()
+  }
+
   const pct = progress.total ? Math.round((progress.cur / progress.total) * 100) : 0
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
+
+      {showPlayer && gifUrl && (
+        <GifPlayer
+          gifUrl={gifUrl}
+          fps={animFps}
+          frameCount={codes.length}
+          onClose={() => setShowPlayer(false)}
+        />
+      )}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
@@ -195,7 +276,7 @@ export default function WriterPage() {
 
             {error && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl px-4 py-3">
-                <span className="mt-px">⚠</span>
+                <span className="mt-px flex-shrink-0">⚠</span>
                 <span>{error}</span>
               </div>
             )}
@@ -219,6 +300,7 @@ export default function WriterPage() {
           {/* Output */}
           <div>
 
+            {/* Encoding progress */}
             {generating && (
               <div className="mb-8 space-y-2">
                 <div className="flex justify-between items-center">
@@ -236,37 +318,78 @@ export default function WriterPage() {
               </div>
             )}
 
+            {/* Empty state */}
             {!generating && codes.length === 0 && (
-              <div className="h-full min-h-[400px] flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50/30">
+              <div className="h-full min-h-[400px] flex flex-col items-center justify-center
+                rounded-2xl border border-dashed border-gray-200 bg-gray-50/30">
                 <div className="text-3xl mb-3 opacity-40">🎨</div>
                 <p className="text-[13px] font-medium text-gray-400">Nothing generated yet</p>
                 <p className="text-[12px] text-gray-300 mt-1">Configure your input and hit generate</p>
               </div>
             )}
 
+            {/* Results */}
             {codes.length > 0 && (
               <div className="space-y-5">
 
+                {/* Stats */}
                 <div className="grid grid-cols-3 divide-x divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                   <Stat label="Frames" value={codes.length} />
                   <Stat label="Speed" value={`${animFps} fps`} />
                   <Stat label="Per frame" value={`${settings.chunkSize}B`} />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] text-gray-400">
-                    <span className="font-medium text-gray-800">{codes.length}</span> JABCode frames generated
-                  </p>
+                {/* Action buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Play GIF — primary action */}
+                  <button
+                    onClick={buildGif}
+                    disabled={gifBuilding}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-700
+                      text-white text-[13px] font-semibold rounded-xl transition-all
+                      disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed
+                      active:scale-[0.99]"
+                  >
+                    {gifBuilding ? (
+                      <>
+                        <span className="animate-spin text-base">⏳</span>
+                        Building GIF... {gifProgress}%
+                      </>
+                    ) : gifUrl ? (
+                      <>▶ Play GIF</>
+                    ) : (
+                      <>🎞 Build &amp; Play GIF</>
+                    )}
+                  </button>
+
+                  {/* ZIP download */}
                   <button
                     onClick={downloadZip}
-                    className="text-[12px] font-medium px-3.5 py-2 border border-gray-200
-                      rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900
-                      transition-all flex items-center gap-1.5"
+                    className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200
+                      rounded-xl text-[13px] font-medium text-gray-600
+                      hover:border-gray-400 hover:text-gray-900 transition-all"
                   >
-                    ↓ Download all as ZIP
+                    ↓ Download ZIP
                   </button>
                 </div>
 
+                {/* GIF build progress bar */}
+                {gifBuilding && (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[11px] text-gray-400">
+                      <span>Assembling GIF frames</span>
+                      <span style={{ fontFamily: 'var(--font-mono)' }}>{gifProgress}%</span>
+                    </div>
+                    <div className="h-[2px] bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-400 rounded-full transition-all duration-200"
+                        style={{ width: `${gifProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Code grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {codes.map((c) => (
                     <div
