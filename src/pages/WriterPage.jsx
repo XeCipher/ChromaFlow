@@ -18,7 +18,7 @@ const DEFAULTS = {
   symbolHeight: 0,
   eccLevel:     3,
   chunkSize:    800,
-  autoFit:      false,
+  autoFit:      true,
 }
 
 function Stat({ label, value }) {

@@ -36,7 +36,7 @@ const fmtBytes = (b) => {
 
 export default function SettingsPanel({ settings, onChange }) {
   const [open, setOpen]         = useState(false)
-  const [autoFit, setAutoFit]   = useState(false)
+  const [autoFit, setAutoFit]   = useState(true)
   const [profile, setProfile]   = useState(null)
   const [grid, setGrid]         = useState(null)   // { modulesX, modulesY, symbolW, symbolH, totalMods }
   const [capacity, setCapacity] = useState(null)   // estimated bytes per frame
@@ -64,7 +64,7 @@ export default function SettingsPanel({ settings, onChange }) {
       chunkSize:    1600,
       autoFit:      true,
     }))
-  }, [autoFit, settings.colorNumber])
+  }, [autoFit, settings.colorNumber, open])
 
   const handleAutoToggle = (checked) => {
     setAutoFit(checked)
@@ -117,8 +117,8 @@ export default function SettingsPanel({ settings, onChange }) {
                   autoFit ? 'bg-gray-900' : 'bg-gray-200'
                 }`}
               >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm
-                  transition-transform duration-200 ${autoFit ? 'translate-x-5' : 'translate-x-0.5'}`}
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm
+                transition-transform duration-200 ${autoFit ? 'translate-x-5' : 'translate-x-0'}`}
                 />
               </button>
             </div>
