@@ -188,15 +188,33 @@ export default function SettingsPanel({ settings, onChange }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             <Field label="Camera FPS" hint="Receiver camera frame rate">
-              <select
+            <select
                 className={inputCls}
-                value={settings.cameraFps}
-                onChange={(e) => set('cameraFps', +e.target.value)}
-              >
+                value={[30, 60, 120].includes(settings.cameraFps) ? settings.cameraFps : 'custom'}
+                onChange={(e) => {
+                if (e.target.value === 'custom') {
+                    set('cameraFps', 1)  // set to 1 to trigger custom input visibility
+                } else {
+                    set('cameraFps', +e.target.value)
+                }
+                }}
+            >
                 <option value={30}>30 fps — browser default</option>
                 <option value={60}>60 fps — native app</option>
                 <option value={120}>120 fps — flagship phone</option>
-              </select>
+                <option value="custom">Custom...</option>
+            </select>
+            {![30, 60, 120].includes(settings.cameraFps) && (
+                <input
+                type="number"
+                className={inputCls + ' mt-2'}
+                min={1}
+                max={240}
+                placeholder="Enter fps..."
+                value={settings.cameraFps}
+                onChange={(e) => set('cameraFps', +e.target.value)}
+                />
+            )}
             </Field>
 
             <Field label="Color Depth" hint="More colours = more data per frame">
