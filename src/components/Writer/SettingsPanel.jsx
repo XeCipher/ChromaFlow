@@ -61,8 +61,7 @@ export default function SettingsPanel({ settings, onChange }) {
       moduleSize:   MIN_MODULE_SIZE,
       symbolWidth:  g.symbolW,
       symbolHeight: g.symbolH,
-      // Auto-set chunk size to match estimated capacity (capped at 65535 per header limit)
-      chunkSize:    Math.min(cap, 65535),
+      chunkSize:    1600,
       autoFit:      true,
     }))
   }, [autoFit, settings.colorNumber])

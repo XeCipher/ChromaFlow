@@ -1,14 +1,8 @@
 import { encodeHeader, decodeHeader, HEADER_SIZE } from './header'
 import { getMimeFromId, getExtFromId } from './mime'
+import { MODE } from './header'
 
-let _writerReady = false
-let _readerReady = false
-let _output      = ''
-let _encCnt      = 0
-let _decCnt      = 0
-
-// We prefix every frame with "CF1:" then base64 the rest.
-// base64 sidesteps null-byte issues when passing binary through jabcode's --input.
+// ─── Frame helpers ────────────────────────────────────────────────────────────
 const MAGIC = 'CF1:'
 
 const b64enc = (bytes) => {
@@ -24,7 +18,6 @@ const b64dec = (str) => {
   return out
 }
 
-// Build the string that goes into jabcodeWriter --input
 export function buildFrame({ mode, totalCodes, codeIndex, chunkBytes, mimeTypeId }) {
   const hdr   = encodeHeader({ mode, totalCodes, codeIndex, chunkLength: chunkBytes.length, mimeTypeId })
   const frame = new Uint8Array(HEADER_SIZE + chunkBytes.length)
@@ -33,7 +26,6 @@ export function buildFrame({ mode, totalCodes, codeIndex, chunkBytes, mimeTypeId
   return MAGIC + b64enc(frame)
 }
 
-// Parse the string that comes out of jabcodeReader
 export function parseFrame(raw) {
   if (!raw?.startsWith(MAGIC)) return null
 
@@ -45,59 +37,100 @@ export function parseFrame(raw) {
   try { hdr = decodeHeader(bytes) } catch { return null }
 
   const payload = bytes.slice(HEADER_SIZE, HEADER_SIZE + hdr.chunkLength)
-  return { ...hdr, payload, mime: getMimeFromId(hdr.mimeTypeId), ext: getExtFromId(hdr.mimeTypeId) }
+  return {
+    ...hdr,
+    payload,
+    mime: getMimeFromId(hdr.mimeTypeId),
+    ext:  getExtFromId(hdr.mimeTypeId),
+  }
 }
 
-// Writer
+// ─── Writer — Web Worker based ────────────────────────────────────────────────
+// Each worker has its own JS scope, so var declarations in jabcodeWriter.js
+// never conflict across worker instances. We terminate and respawn the worker
+// every REINIT_EVERY frames to prevent WASM heap accumulation.
 
+const REINIT_EVERY = 20
+
+let _currentWorker     = null
+let _workerFrameCount  = 0
+let _encCnt            = 0
+
+function spawnWorker() {
+  if (_currentWorker) _currentWorker.terminate()
+  _currentWorker    = new Worker('/encoder.worker.js')
+  _workerFrameCount = 0
+}
+
+export function resetFrameCount() {
+  _workerFrameCount = 0
+}
+
+// loadWriter — kept for API compatibility, spawns the first worker
 export function loadWriter() {
-  if (_writerReady) return Promise.resolve()
-
-  return new Promise((resolve, reject) => {
-    window.Module = {
-      print:    (t) => console.log('[writer]', t),
-      printErr: (t) => console.warn('[writer err]', t),
-      onRuntimeInitialized() { _writerReady = true; resolve() },
-    }
-    const s   = document.createElement('script')
-    s.src     = '/assets/jabcodeWriter.js'
-    s.onerror = () => reject(new Error('Failed to load jabcodeWriter.js'))
-    document.head.appendChild(s)
-  })
+  spawnWorker()
+  // Return a promise that resolves immediately — the worker initialises
+  // lazily on first message
+  return Promise.resolve()
 }
 
 export function encodeFrame(frameStr, opts = {}) {
-  if (!_writerReady) throw new Error('Writer not ready')
-
-  _encCnt++
-  const out  = `_w${_encCnt}.png`
-  const args = ['--input', frameStr, '--output', out]
-
-  if (opts.colorNumber) args.push('--color-number', String(opts.colorNumber))
-
-  // If explicit symbol dimensions are given, use those and skip module-size
-  // JABCode will fill the exact dimensions requested
-  if ((opts.symbolWidth ?? 0) > 0 && (opts.symbolHeight ?? 0) > 0) {
-    args.push('--symbol-width',  String(opts.symbolWidth))
-    args.push('--symbol-height', String(opts.symbolHeight))
-  } else {
-    // Manual mode — use module size, let JABCode auto-size the symbol
-    if (opts.moduleSize) args.push('--module-size', String(opts.moduleSize))
+  // Spawn a fresh worker every REINIT_EVERY frames
+  if (!_currentWorker || _workerFrameCount >= REINIT_EVERY) {
+    spawnWorker()
   }
 
-  if (opts.eccLevel) args.push('--ecc-level', String(opts.eccLevel))
+  _encCnt++
+  _workerFrameCount++
 
-  window.callMain(args)
+  const id = _encCnt
 
-  const png = window.FS.readFile(out)
-  window.FS.unlink(out)
-  return png
+  return new Promise((resolve, reject) => {
+    const worker = _currentWorker
+
+    const cleanup = () => {
+      worker.onmessage = null
+      worker.onerror   = null
+    }
+
+    worker.onmessage = (e) => {
+      if (e.data.id !== id) return
+      cleanup()
+      if (e.data.success) {
+        resolve(new Uint8Array(e.data.png))
+      } else {
+        reject(new Error(e.data.error ?? 'Unknown encoder error'))
+      }
+    }
+
+    worker.onerror = (e) => {
+      cleanup()
+      reject(new Error(e.message ?? 'Worker error'))
+    }
+
+    worker.postMessage({ frameStr, opts, id })
+  })
 }
 
-// Reader
+// ─── Reader ───────────────────────────────────────────────────────────────────
+let _readerReady = false
+let _output      = ''
+let _decCnt      = 0
 
 export function loadReader() {
   if (_readerReady) return Promise.resolve()
+
+  if (document.querySelector('script[src="/assets/jabcodeReader.js"]')) {
+    return new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (window.callMain && window.FS) {
+          clearInterval(check)
+          _readerReady = true
+          resolve()
+        }
+      }, 50)
+    })
+  }
 
   return new Promise((resolve, reject) => {
     window.Module = {
@@ -120,7 +153,7 @@ export function decodeImage(pngData) {
   window.FS.writeFile(name, pngData)
   _output = ''
 
-  try { window.callMain([name]) } catch (_) { /* miss — no code in frame */ }
+  try { window.callMain([name]) } catch (_) { /* decode miss — normal */ }
 
   window.FS.unlink(name)
 

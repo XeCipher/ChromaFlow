@@ -59,7 +59,9 @@ export function estimateCapacity(totalModules, colorCount = 8, eccOverhead = 0.3
   const bitsPerModule = Math.log2(colorCount)
   const rawBits       = totalModules * bitsPerModule
   const usableBits    = rawBits * (1 - eccOverhead)
-  return Math.floor(usableBits / 8)  // bytes
+  const bytes         = Math.floor(usableBits / 8)
+  // Cap at 4096 bytes — WASM CLI arg limit when base64 encoded
+  return Math.min(bytes, 4096)
 }
 
 // For the square mode (original paper formula)

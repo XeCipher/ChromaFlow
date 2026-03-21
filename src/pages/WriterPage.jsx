@@ -5,7 +5,7 @@ import Navbar from '../components/shared/Navbar'
 import FileDropZone from '../components/Writer/FileDropZone'
 import SettingsPanel from '../components/Writer/SettingsPanel'
 import GifPlayer from '../components/Writer/GifPlayer'
-import { loadWriter, encodeFrame, buildFrame } from '../core/jabcode'
+import { loadWriter, encodeFrame, buildFrame, resetFrameCount } from '../core/jabcode'
 import { chunkBytes } from '../core/chunker'
 import { getIdFromFilename } from '../core/mime'
 import { MODE } from '../core/header'
@@ -61,6 +61,7 @@ export default function WriterPage() {
     setCodes([])
     setRawPngs([])
     setGifUrl(null)
+    resetFrameCount()
 
     let payload, mimeId, frameMode
 
@@ -99,7 +100,7 @@ export default function WriterPage() {
 
       let png
       try {
-        png = encodeFrame(str, {
+        png = await encodeFrame(str, {
           colorNumber:  settings.colorNumber,
           moduleSize:   settings.moduleSize,
           // In adaptive mode these are set to fill the screen

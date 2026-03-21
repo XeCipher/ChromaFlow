@@ -42,6 +42,8 @@ export default function ReaderPage() {
   const [scanError, setScanError]     = useState('')
   const [cameraOn, setCameraOn]       = useState(false)
   const [cameraStatus, setCameraStatus] = useState('')
+  const [fileMime, setFileMime] = useState('application/octet-stream')
+  const [fileExt,  setFileExt]  = useState('bin')
 
   const streamRef     = useRef(null)
   const videoRef      = useRef(null)
@@ -87,6 +89,8 @@ export default function ReaderPage() {
     if (totalRef.current === null) {
       setTotalCodes(tc)
       setSessionMode(mode === MODE.TEXT ? 'text' : 'binary')
+      setFileMime(frame.mime)
+      setFileExt(frame.ext)
     }
 
     if (imgUrl) {
@@ -128,8 +132,8 @@ export default function ReaderPage() {
     if (sessionMode === 'text') {
       setResult({ type: 'text', text: new TextDecoder('utf-8').decode(full) })
     } else {
-      const blob = new Blob([full], { type: 'application/octet-stream' })
-      setResult({ type: 'binary', blob, filename: 'reconstructed_file.bin', size: full.length })
+      const blob = new Blob([full], { type: fileMime })
+      setResult({ type: 'binary', blob, filename: `reconstructed_file.${fileExt}`, size: full.length })
     }
   }, [allDone])
 
@@ -198,6 +202,8 @@ export default function ReaderPage() {
     setResult(null)
     setLastScan(null)
     setScanError('')
+    setFileMime('application/octet-stream')
+    setFileExt('bin')
   }
 
   const missing = totalCodes
