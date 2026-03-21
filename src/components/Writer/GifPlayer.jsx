@@ -2,38 +2,70 @@ import { useEffect, useRef, useState } from 'react'
 
 export default function GifPlayer({ gifUrl, fps, frameCount, onClose }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef(null)
 
+  // Sync state with actual browser fullscreen status
+  useEffect(() => {
+    const onChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  // ESC when not in native fullscreen closes the modal
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') {
-        if (isFullscreen) setIsFullscreen(false)
-        else onClose()
-      }
+      if (e.key === 'Escape' && !document.fullscreenElement) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isFullscreen, onClose])
+  }, [onClose])
 
+  // Lock body scroll while modal is open
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
   }, [])
 
+  const enterFullscreen = async () => {
+    try {
+      await containerRef.current?.requestFullscreen()
+    } catch (err) {
+      console.warn('Fullscreen request failed:', err)
+    }
+  }
+
+  const exitFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen()
+    } catch (err) {
+      console.warn('Exit fullscreen failed:', err)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
 
+      {/* Backdrop — clicking outside closes modal (only when not fullscreen) */}
+      {!isFullscreen && (
+        <div
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Modal / Fullscreen container */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => !isFullscreen && onClose()}
-      />
+        ref={containerRef}
+        className={`relative z-10 bg-white flex flex-col transition-all duration-200 ${
+          isFullscreen
+            ? 'w-screen h-screen rounded-none'
+            : 'w-full max-w-2xl mx-4 rounded-2xl shadow-2xl shadow-black/20 max-h-[90vh]'
+        }`}
+      >
 
-      <div className={`relative z-10 bg-white flex flex-col transition-all duration-300 ${
-        isFullscreen
-          ? 'w-screen h-screen rounded-none'
-          : 'w-full max-w-2xl mx-4 rounded-2xl shadow-2xl shadow-black/20 max-h-[90vh]'
-      }`}>
-
-        {/* Header — hidden in fullscreen */}
+        {/* Header — hidden when fullscreen */}
         {!isFullscreen && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
             <div>
@@ -44,7 +76,7 @@ export default function GifPlayer({ gifUrl, fps, frameCount, onClose }) {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsFullscreen(true)}
+                onClick={enterFullscreen}
                 title="Go fullscreen — point receiver camera at this screen"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium
                   text-gray-600 border border-gray-200 rounded-lg
@@ -72,9 +104,9 @@ export default function GifPlayer({ gifUrl, fps, frameCount, onClose }) {
           </div>
         )}
 
-        {/* GIF */}
+        {/* GIF image */}
         <div className={`flex items-center justify-center bg-white overflow-hidden ${
-          isFullscreen ? 'flex-1' : 'p-6'
+          isFullscreen ? 'flex-1 w-full h-full' : 'p-6'
         }`}>
           <img
             src={gifUrl}
@@ -102,7 +134,7 @@ export default function GifPlayer({ gifUrl, fps, frameCount, onClose }) {
                 ↓ Download
               </a>
               <button
-                onClick={() => setIsFullscreen(false)}
+                onClick={exitFullscreen}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium
                   bg-white/90 backdrop-blur-sm text-gray-700 border border-gray-200
                   rounded-lg hover:bg-white transition-all shadow-sm"
