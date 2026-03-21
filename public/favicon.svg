@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Row 1 -->
+  <rect x="1"  y="1"  width="6" height="6" rx="1" fill="#EF4444"/>
+  <rect x="9"  y="1"  width="6" height="6" rx="1" fill="#3B82F6"/>
+  <rect x="17" y="1"  width="6" height="6" rx="1" fill="#22C55E"/>
+  <rect x="25" y="1"  width="6" height="6" rx="1" fill="#EAB308"/>
+  <!-- Row 2 -->
+  <rect x="1"  y="9"  width="6" height="6" rx="1" fill="#06B6D4"/>
+  <rect x="9"  y="9"  width="6" height="6" rx="1" fill="#A855F7"/>
+  <rect x="17" y="9"  width="6" height="6" rx="1" fill="#F97316"/>
+  <rect x="25" y="9"  width="6" height="6" rx="1" fill="#EC4899"/>
+  <!-- Row 3 -->
+  <rect x="1"  y="17" width="6" height="6" rx="1" fill="#3B82F6"/>
+  <rect x="9"  y="17" width="6" height="6" rx="1" fill="#22C55E"/>
+  <rect x="17" y="17" width="6" height="6" rx="1" fill="#EF4444"/>
+  <rect x="25" y="17" width="6" height="6" rx="1" fill="#06B6D4"/>
+  <!-- Row 4 -->
+  <rect x="1"  y="25" width="6" height="6" rx="1" fill="#EAB308"/>
+  <rect x="9"  y="25" width="6" height="6" rx="1" fill="#EC4899"/>
+  <rect x="17" y="25" width="6" height="6" rx="1" fill="#A855F7"/>
+  <rect x="25" y="25" width="6" height="6" rx="1" fill="#F97316"/>
+</svg>
