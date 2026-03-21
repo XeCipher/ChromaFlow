@@ -74,10 +74,18 @@ export function encodeFrame(frameStr, opts = {}) {
   const args = ['--input', frameStr, '--output', out]
 
   if (opts.colorNumber) args.push('--color-number', String(opts.colorNumber))
-  if (opts.moduleSize)  args.push('--module-size',  String(opts.moduleSize))
-  if ((opts.symbolWidth  ?? 0) > 0) args.push('--symbol-width',  String(opts.symbolWidth))
-  if ((opts.symbolHeight ?? 0) > 0) args.push('--symbol-height', String(opts.symbolHeight))
-  if (opts.eccLevel)    args.push('--ecc-level',    String(opts.eccLevel))
+
+  // If explicit symbol dimensions are given, use those and skip module-size
+  // JABCode will fill the exact dimensions requested
+  if ((opts.symbolWidth ?? 0) > 0 && (opts.symbolHeight ?? 0) > 0) {
+    args.push('--symbol-width',  String(opts.symbolWidth))
+    args.push('--symbol-height', String(opts.symbolHeight))
+  } else {
+    // Manual mode — use module size, let JABCode auto-size the symbol
+    if (opts.moduleSize) args.push('--module-size', String(opts.moduleSize))
+  }
+
+  if (opts.eccLevel) args.push('--ecc-level', String(opts.eccLevel))
 
   window.callMain(args)
 
