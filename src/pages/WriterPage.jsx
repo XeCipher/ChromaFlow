@@ -108,6 +108,7 @@ export default function WriterPage() {
           symbolWidth:  settings.symbolWidth  ?? 0,
           symbolHeight: settings.symbolHeight ?? 0,
           eccLevel:     settings.eccLevel,
+          chunkSize:    settings.chunkSize,
         })
       } catch (e) {
         setError(`Frame ${i + 1} failed: ${e.message}. Try reducing chunk size.`)

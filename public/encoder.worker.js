@@ -7,7 +7,11 @@ var _wasmReady = false;
 var Module = {
   print:    function() {},
   printErr: function(t) { console.warn('[worker writer]', t); },
-  onRuntimeInitialized: function() { _wasmReady = true; },
+  onRuntimeInitialized: function() {
+    _wasmReady = true;
+    // Signal to the main thread that this worker is ready to accept frames
+    self.postMessage({ type: 'ready' });
+  },
   locateFile: function(path) {
     return '/assets/' + path;
   }
@@ -15,17 +19,11 @@ var Module = {
 
 importScripts('/assets/jabcodeWriter.js');
 
-function waitForWasm() {
-  return new Promise(function(resolve) {
-    if (_wasmReady) return resolve();
-    var check = setInterval(function() {
-      if (_wasmReady) { clearInterval(check); resolve(); }
-    }, 50);
-  });
-}
-
-self.onmessage = async function(e) {
-  await waitForWasm();
+self.onmessage = function(e) {
+  if (!_wasmReady) {
+    self.postMessage({ type: 'error', id: e.data.id, error: 'WASM not ready' });
+    return;
+  }
 
   var frameStr = e.data.frameStr;
   var opts     = e.data.opts;
@@ -49,9 +47,8 @@ self.onmessage = async function(e) {
     callMain(args);
     var png = FS.readFile(outName);
     FS.unlink(outName);
-    // Transfer the buffer to avoid copying
-    self.postMessage({ success: true, png: png, id: id }, [png.buffer]);
+    self.postMessage({ type: 'result', success: true, png: png, id: id }, [png.buffer]);
   } catch(err) {
-    self.postMessage({ success: false, error: err.message, id: id });
+    self.postMessage({ type: 'result', success: false, error: err.message, id: id });
   }
 };

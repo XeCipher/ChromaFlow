@@ -52,17 +52,16 @@ export default function SettingsPanel({ settings, onChange }) {
     const g = computeAdaptiveGrid(p.Weff, p.Heff, MIN_MODULE_SIZE)
     setGrid(g)
 
-    const cap = estimateCapacity(g.totalMods, settings.colorNumber)
-    setCapacity(cap)
+    const cap = estimateCapacity(g.symbolW, g.symbolH, MIN_MODULE_SIZE, settings.colorNumber, settings.eccLevel)
 
-    // Push computed values up to WriterPage
     onChange(prev => ({
-      ...prev,
-      moduleSize:   MIN_MODULE_SIZE,
-      symbolWidth:  g.symbolW,
-      symbolHeight: g.symbolH,
-      chunkSize:    1600,
-      autoFit:      true,
+        ...prev,
+        moduleSize:   MIN_MODULE_SIZE,
+        symbolWidth:  g.symbolW,
+        symbolHeight: g.symbolH,
+        eccLevel:     1,
+        chunkSize:    cap,
+        autoFit:      true,
     }))
   }, [autoFit, settings.colorNumber, open])
 
@@ -77,6 +76,7 @@ export default function SettingsPanel({ settings, onChange }) {
         moduleSize:   12,
         symbolWidth:  0,
         symbolHeight: 0,
+        eccLevel:     3,
         chunkSize:    800,
         autoFit:      false,
       }))

@@ -20,7 +20,7 @@
 //   C_raw = modulesX * modulesY * log2(colorCount) bits
 //   C_payload ≈ C_raw * 0.7 / 8 bytes   (30% ECC overhead)
 
-export const MIN_MODULE_SIZE = 4   // px — below this modules blur under camera
+export const MIN_MODULE_SIZE = 10   // px — below this modules blur under camera
 export const DEFAULT_MODULE_SIZE = 12  // px — safe manual default
 
 export function getDisplayProfile() {
@@ -55,13 +55,13 @@ export function computeAdaptiveGrid(Weff, Heff, moduleSize = MIN_MODULE_SIZE) {
 // Estimate usable payload bytes per frame
 // colorCount: 4 or 8 (JABCode parameter)
 // eccOverhead: fraction lost to Reed-Solomon (default 30%)
-export function estimateCapacity(totalModules, colorCount = 8, eccOverhead = 0.3) {
-  const bitsPerModule = Math.log2(colorCount)
-  const rawBits       = totalModules * bitsPerModule
-  const usableBits    = rawBits * (1 - eccOverhead)
-  const bytes         = Math.floor(usableBits / 8)
-  // Cap at 4096 bytes — WASM CLI arg limit when base64 encoded
-  return Math.min(bytes, 4096)
+export function estimateCapacity(symbolW, symbolH, moduleSize, colorCount = 8, eccLevel = 3) {
+  const modules      = (symbolW / moduleSize) * (symbolH / moduleSize)
+  const bitsPerMod   = Math.log2(colorCount)
+  const eccOverhead  = 0.1 + (eccLevel * 0.03)   // rough: level 1=13%, level 3=19%
+  const usableBytes  = Math.floor((modules * bitsPerMod * (1 - eccOverhead)) / 8)
+  const safeBytes    = Math.floor(usableBytes / 1.33)  // base64 inflation
+  return Math.min(safeBytes, 65535)
 }
 
 // For the square mode (original paper formula)
