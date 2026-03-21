@@ -54,6 +54,8 @@ export default function SettingsPanel({ settings, onChange }) {
 
     const cap = estimateCapacity(g.symbolW, g.symbolH, MIN_MODULE_SIZE, settings.colorNumber, settings.eccLevel)
 
+    setCapacity(cap)
+
     onChange(prev => ({
         ...prev,
         moduleSize:   MIN_MODULE_SIZE,
