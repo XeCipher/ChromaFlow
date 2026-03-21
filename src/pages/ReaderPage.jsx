@@ -4,6 +4,7 @@ import SlotGrid from '../components/Reader/SlotGrid'
 import ResultView from '../components/Reader/ResultView'
 import { loadReader, decodeImage, parseFrame } from '../core/jabcode'
 import { MODE } from '../core/header'
+import { getMimeFromId, getExtFromId } from '../core/mime'
 
 function fileToPng(file) {
   return new Promise((resolve, reject) => {
