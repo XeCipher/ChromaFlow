@@ -58,7 +58,7 @@ export default function SettingsPanel({ settings, onChange }) {
 
     onChange(prev => ({
         ...prev,
-        moduleSize:   MIN_MODULE_SIZE,
+        moduleSize:   g.moduleSize,
         symbolWidth:  g.symbolW,
         symbolHeight: g.symbolH,
         eccLevel:     1,
@@ -153,7 +153,7 @@ export default function SettingsPanel({ settings, onChange }) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Module size</span>
-                    <span className="text-emerald-600 font-semibold">{MIN_MODULE_SIZE} px</span>
+                    <span className="text-emerald-600 font-semibold">{grid.moduleSize} px</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Grid</span>
@@ -235,7 +235,7 @@ export default function SettingsPanel({ settings, onChange }) {
               hint={autoFit ? `Fixed at ${MIN_MODULE_SIZE}px in adaptive mode` : 'Larger = easier to scan'}
             >
               {autoFit ? (
-                <div className={disabledInputCls}>{MIN_MODULE_SIZE} px (adaptive min)</div>
+                <div className={disabledInputCls}>{grid?.moduleSize ?? MIN_MODULE_SIZE} px (adaptive min)</div>
               ) : (
                 <input
                   type="number"
