@@ -23,5 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-android/
-capacitor.config.json
+public/assets/jabcodeWriter.js
+public/assets/jabcodeWriter.wasm
+public/assets/jabcodeReader.js
+public/assets/jabcodeReader.wasm
