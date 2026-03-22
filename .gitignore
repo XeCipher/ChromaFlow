@@ -22,8 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-public/assets/jabcodeWriter.js
-public/assets/jabcodeWriter.wasm
-public/assets/jabcodeReader.js
-public/assets/jabcodeReader.wasm

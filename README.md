@@ -47,11 +47,98 @@ Camera → Frame scan → Header parse → Chunk reassembly → File
 
 ---
 
-## JABCode
+## JABCode WebAssembly Compilation
 
-ChromaFlow uses [JABCode](https://jabcode.org) (Just Another Barcode), a polychrome 2D barcode by Fraunhofer SIT, standardised as ISO/IEC 22607. JABCode supports up to 256 colours per module and achieves approximately 2.5× higher data density than QR codes.
+This section documents the process of compiling JABCode (reader and writer) to WebAssembly.
 
-The WASM binaries (`jabcodeWriter.wasm`, `jabcodeReader.wasm`) are compiled from the [JABCode reference implementation](https://github.com/jabcode/jabcode) using Emscripten.
+### Prerequisites
+
+- [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) installed and activated
+- Git (for cloning repositories)
+
+### Step 1: Get JABCode Source
+
+Clone or download the JABCode repository:
+
+```bash
+git clone https://github.com/jabcode/jabcode.git
+cd jabcode
+git checkout 76a7655bb61e65f81ea962e575cdbd06fedebb26
+cd src/jabcode
+```
+
+### Step 2: Initial JABCode Compilation
+
+Compile the JABCode library:
+
+```bash
+emmake make
+```
+
+### Step 3: Compile libtiff for WebAssembly
+
+JABCode depends on libpng, libtiff and libz, but the provided `.a` files are not compatible with WebAssembly. We need to use libpng and libz provided by emsdk and compile libtiff from source.
+
+1. Download libtiff source (v4.7.1):
+   ```bash
+   wget https://download.osgeo.org/libtiff/tiff-4.7.1.tar.gz
+   tar -xzf tiff-4.7.1.tar.gz
+   cd tiff-4.7.1
+   ```
+
+2. Configure and compile with Emscripten:
+   ```bash
+   emconfigure ./configure
+   emmake make
+   ```
+
+3. Copy the compiled library:
+   ```bash
+   cp libtiff/.libs/libtiff.a /path/to/jabcode/src/jabcode/lib/
+   ```
+   Replace the existing `libtiff.a` in `jabcode/src/jabcode/lib/` with this WebAssembly-compatible version.
+
+### Step 4: Modify Makefiles
+
+Modify the Makefiles in both `src/jabcodeReader` and `src/jabcodeWriter`:
+
+**Original line 10:**
+```makefile
+$(CC) $^ -L../jabcode/build -ljabcode -L../jabcode/lib -ltiff -lpng16 -lz -lm $(CFLAGS) -o $@
+```
+
+**Replace with:**
+```makefile
+$(CC) $^ -L../jabcode/build -ljabcode -L../jabcode/lib -ltiff -sUSE_LIBPNG -sUSE_ZLIB -sINVOKE_RUN=0 -sALLOW_MEMORY_GROWTH=1 -lm $(CFLAGS) -o $@
+```
+
+This change:
+- Uses Emscripten's built-in libpng and zlib instead of the provided static libraries
+- Adds `-sINVOKE_RUN=0` to prevent automatic execution
+- Adds `-sALLOW_MEMORY_GROWTH=1` to dynamically increase the heap memory while running jabcodereader prevent OOM when scanning large images especially from phone cameras
+- Keeps libtiff linked from the custom-compiled version
+
+**Note:** Instead of replacing `libtiff.a`, you can modify `-L../jabcode/lib` to point directly to your libtiff build directory.
+
+### Step 5: Build Reader and Writer
+
+Build the JABCode reader:
+```bash
+cd src/jabcodeReader
+emmake make CC=emcc TARGET=jabcodeReader.js
+```
+
+Build the JABCode writer:
+```bash
+cd src/jabcodeWriter
+emmake make CC=emcc TARGET=jabcodeWriter.js
+```
+
+### Output Files
+
+After successful compilation, you'll have:
+- `jabcodeReader.js` and `jabcodeReader.wasm` - WebAssembly JABCode decoder
+- `jabcodeWriter.js` and `jabcodeWriter.wasm` - WebAssembly JABCode encoder
 
 ---
 
@@ -167,4 +254,31 @@ ChromaFlow is the capstone project (BCSE498J) for B.Tech Computer Science at VIT
 
 ## License
 
-This project uses JABCode under [LGPL 2.1](https://github.com/jabcode/jabcode/blob/master/LICENSE).
+### JABCode
+
+This project uses JABCode, which is licensed under the GNU Lesser General Public License v3 (LGPLv3) with a static linking exception.
+
+**Copyright Notice:**
+```
+libjabcode - JABCode Encoding/Decoding Library
+
+Copyright 2016 by Fraunhofer SIT. All rights reserved.
+
+Contact: Huajian Liu <liu@sit.fraunhofer.de>
+         Waldemar Berchtold <waldemar.berchtold@sit.fraunhofer.de>
+```
+
+**License:** LGPLv3 with special exception for static/dynamic linking
+
+The JABCode library includes a special exception to LGPLv3 that permits conveying a Combined Work (your application) that links statically or dynamically to the library without providing Minimal Corresponding Source, provided you comply with other LGPLv3 provisions and your application's own license terms.
+
+Full JABCode license: https://github.com/jabcode/jabcode/blob/master/LICENSE
+
+### Third-Party Dependencies
+
+This project uses the following libraries through Emscripten:
+- **libpng** - PNG reference library (http://www.libpng.org/)
+- **zlib** - Compression library (https://www.zlib.net/)
+- **libtiff** - TIFF library (http://www.libtiff.org/)
+
+These libraries are dynamically linked through Emscripten and are not modified or redistributed as part of this project. Users should refer to the original library licenses for terms of use.
