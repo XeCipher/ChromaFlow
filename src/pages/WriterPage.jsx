@@ -134,7 +134,7 @@ export default function WriterPage() {
       try {
         leftPng = await encodeFrame(leftStr, {
           colorNumber:  settings.colorNumber,
-          moduleSize:   settings.moduleSize,
+          moduleSize:   Math.round(settings.moduleSize * 1.5),
           symbolWidth:  settings.symbolWidth ?? 0,
           symbolHeight: settings.symbolHeight ?? 0,
           eccLevel:     settings.eccLevel,
