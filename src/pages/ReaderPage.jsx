@@ -49,11 +49,12 @@ export default function ReaderPage() {
 
   const streamRef     = useRef(null)
   const videoRef      = useRef(null)
-  const timerRef      = useRef(null)
   const lastHashRef   = useRef(null)
   const scanFileInput = useRef(null)
   const totalRef      = useRef(null)
   const receivedRef   = useRef(new Map())
+  const rafRef       = useRef(null)
+  const lastScanTime = useRef(0)
 
   // Keep refs in sync
   useEffect(() => { totalRef.current = totalCodes }, [totalCodes])
@@ -160,6 +161,13 @@ export default function ReaderPage() {
   }, [allDone])
 
   const startCamera = async () => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+
+    lastScanTime.current = 0
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -174,12 +182,28 @@ export default function ReaderPage() {
       const detectedFps = track.getSettings().frameRate
       if (detectedFps) setDetectedFps(Math.round(detectedFps))
 
-      timerRef.current = setInterval(async () => {
+      const targetInterval = 1000 / 30  // 30 FPS scanning
+
+      const scanLoop = async (timestamp) => {
         const video = videoRef.current
-        if (!video || video.readyState < 2) return
+        if (!video || video.readyState < 2) {
+          rafRef.current = requestAnimationFrame(scanLoop)
+          return
+        }
+
+        if (timestamp - lastScanTime.current < targetInterval) {
+          rafRef.current = requestAnimationFrame(scanLoop)
+          return
+        }
+
+        lastScanTime.current = timestamp
+
         const w = video.videoWidth
         const h = video.videoHeight
-        if (!w || !h) return
+        if (!w || !h) {
+          rafRef.current = requestAnimationFrame(scanLoop)
+          return
+        }
 
         const canvas  = document.createElement('canvas')
         canvas.width  = w
@@ -187,27 +211,36 @@ export default function ReaderPage() {
         canvas.getContext('2d').drawImage(video, 0, 0, w, h)
 
         const hash = quickHash(canvas.getContext('2d').getImageData(0, 0, 8, 8))
-        if (hash === lastHashRef.current) return
-        lastHashRef.current = hash
+        if (hash !== lastHashRef.current) {
+          lastHashRef.current = hash
 
-        const pngData = await new Promise(res => {
-          canvas.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png')
-        })
+          const pngData = await new Promise(res => {
+            canvas.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png')
+          })
 
-        const raw = decodeImage(pngData)
-        const ok  = processRaw(raw)
-        setCameraStatus(ok
-          ? `Got frame — ${receivedRef.current.size} / ${totalRef.current ?? '?'}`
-          : 'Scanning...'
-        )
-      }, 150)
+          const raw = decodeImage(pngData)
+          const ok  = processRaw(raw)
+
+          setCameraStatus(ok
+            ? `Got frame — ${receivedRef.current.size} / ${totalRef.current ?? '?'}`
+            : 'Scanning...'
+          )
+        }
+
+        rafRef.current = requestAnimationFrame(scanLoop)
+      }
+
+      rafRef.current = requestAnimationFrame(scanLoop)
     } catch (err) {
       setScanError('Camera access denied: ' + err.message)
     }
   }
 
   const stopCamera = () => {
-    clearInterval(timerRef.current)
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
