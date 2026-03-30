@@ -131,11 +131,31 @@ export default function ReaderPage() {
       offset += received.get(i).length
     }
 
+    let actualData = full
+    let extractedFileName = null
+
+    if (sessionMode === 'binary') {
+      const nameLen = full[0]
+
+      if (nameLen > 0 && nameLen < 100) {
+        const nameBytes = full.slice(1, 1 + nameLen)
+        extractedFileName = new TextDecoder().decode(nameBytes)
+
+        actualData = full.slice(1 + nameLen)
+      }
+    }
+
     if (sessionMode === 'text') {
       setResult({ type: 'text', text: new TextDecoder('utf-8').decode(full) })
     } else {
-      const blob = new Blob([full], { type: fileMime })
-      setResult({ type: 'binary', blob, filename: `reconstructed_file.${fileExt}`, size: full.length })
+      const blob = new Blob([actualData], { type: fileMime })
+
+      setResult({
+        type: 'binary',
+        blob,
+        filename: extractedFileName || `reconstructed_file.${fileExt}`,
+        size: actualData.length
+      })
     }
   }, [allDone])
 
