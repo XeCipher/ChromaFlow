@@ -20,7 +20,16 @@ export default function FramePlayer({ rawPngs = [], fps, setFps }) {
       URL.createObjectURL(new Blob([png], { type: 'image/png' }))
     )
 
-    setFrameUrls(urls)
+    // GROUP INTO PAIRS
+    const paired = []
+    for (let i = 0; i < urls.length; i += 2) {
+      paired.push({
+        left: urls[i],
+        right: urls[i + 1] || null
+      })
+    }
+
+    setFrameUrls(paired)
 
     return () => {
       urls.forEach(url => URL.revokeObjectURL(url))
@@ -97,12 +106,23 @@ export default function FramePlayer({ rawPngs = [], fps, setFps }) {
             {isFullscreen ? 'Exit' : 'Fullscreen'}
         </button>
 
-        <img
-          src={frameUrls[index]}
-          alt="frame"
-          className="max-h-full object-contain"
-          style={{ imageRendering: 'pixelated' }}
-        />
+        <div className="flex items-center justify-center gap-2 w-full h-full">
+          <img
+            src={frameUrls[index]?.left}
+            alt="left"
+            className="max-h-full object-contain"
+            style={{ imageRendering: 'pixelated' }}
+          />
+
+          {frameUrls[index]?.right && (
+            <img
+              src={frameUrls[index].right}
+              alt="right"
+              className="max-h-full object-contain"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Controls */}
