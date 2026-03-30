@@ -90,11 +90,27 @@ export default function WriterPage() {
       setProgress({ cur: i + 1, total })
       await new Promise(r => setTimeout(r, 0))
 
+      let chunk = chunks[i]
+
+      if (i === 0 && inputMode === 'file') {
+        const encoder = new TextEncoder()
+        const nameBytes = encoder.encode(file.name)
+
+        const nameLen = new Uint8Array([nameBytes.length])
+
+        const combined = new Uint8Array(1 + nameBytes.length + chunk.length)
+        combined.set(nameLen, 0)
+        combined.set(nameBytes, 1)
+        combined.set(chunk, 1 + nameBytes.length)
+
+        chunk = combined
+      }
+
       const str = buildFrame({
         mode:       frameMode,
         totalCodes: total,
         codeIndex:  i,
-        chunkBytes: chunks[i],
+        chunkBytes: chunk,
         mimeTypeId: mimeId,
       })
 
