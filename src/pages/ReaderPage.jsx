@@ -215,7 +215,12 @@ export default function ReaderPage() {
         if (hash !== lastHashRef.current) {
           lastHashRef.current = hash
 
-          const midX = Math.floor(canvas.width / 2)
+          const padding = Math.floor(canvas.width * 0.05) // 5% margin
+          const usableWidth = canvas.width - (padding * 2)
+          const halfWidth = Math.floor(usableWidth / 2)
+
+          const leftX  = padding
+          const rightX = padding + halfWidth
 
           const processHalf = async (sx, sy, sw, sh) => {
             const tempCanvas = document.createElement('canvas')
@@ -240,8 +245,8 @@ export default function ReaderPage() {
             }
           }
 
-          const okLeft  = await processHalf(0, 0, midX, canvas.height)
-          const okRight = await processHalf(midX, 0, midX, canvas.height)
+          const okLeft  = await processHalf(leftX, 0, halfWidth, canvas.height)
+          const okRight = await processHalf(rightX, 0, halfWidth, canvas.height)
 
           const ok = okLeft || okRight
 
