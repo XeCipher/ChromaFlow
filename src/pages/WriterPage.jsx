@@ -4,7 +4,7 @@ import GIF from 'gif.js'
 import Navbar from '../components/shared/Navbar'
 import FileDropZone from '../components/Writer/FileDropZone'
 import SettingsPanel from '../components/Writer/SettingsPanel'
-import GifPlayer from '../components/Writer/GifPlayer'
+import FramePlayer from '../components/Writer/FramePlayer'
 import { loadWriter, encodeFrame, buildFrame, resetFrameCount } from '../core/jabcode'
 import { chunkBytes } from '../core/chunker'
 import { getIdFromFilename } from '../core/mime'
@@ -45,8 +45,7 @@ export default function WriterPage() {
   const [error, setError]             = useState('')
   const [gifBuilding, setGifBuilding] = useState(false)
   const [gifProgress, setGifProgress] = useState(0)
-  const [gifUrl, setGifUrl]           = useState(null)
-  const [showPlayer, setShowPlayer]   = useState(false)
+  const [playerFps, setPlayerFps] = useState(15)
 
   useEffect(() => {
     loadWriter()
@@ -60,7 +59,6 @@ export default function WriterPage() {
     setError('')
     setCodes([])
     setRawPngs([])
-    setGifUrl(null)
     resetFrameCount()
 
     let payload, mimeId, frameMode
@@ -156,7 +154,6 @@ export default function WriterPage() {
 
   const buildGif = async () => {
     if (gifBuilding || rawPngs.length === 0) return
-    if (gifUrl) { setShowPlayer(true); return }
 
     setGifBuilding(true)
     setGifProgress(0)
@@ -185,7 +182,7 @@ export default function WriterPage() {
     canvas.width  = w
     canvas.height = h
     const ctx     = canvas.getContext('2d')
-    const delay   = Math.round(1000 / animFps)
+    const delay   = Math.round(1000 / playerFps)
 
     for (const bmp of bitmaps) {
       ctx.clearRect(0, 0, w, h)
@@ -196,10 +193,15 @@ export default function WriterPage() {
     gif.on('progress', (p) => setGifProgress(Math.round(p * 100)))
     gif.on('finished', (blob) => {
       URL.revokeObjectURL(workerUrl)
-      setGifUrl(URL.createObjectURL(blob))
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'chromaflow.gif'
+      a.click()
+
       setGifBuilding(false)
       setGifProgress(0)
-      setShowPlayer(true)
     })
 
     gif.render()
@@ -210,15 +212,6 @@ export default function WriterPage() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-
-      {showPlayer && gifUrl && (
-        <GifPlayer
-          gifUrl={gifUrl}
-          fps={animFps}
-          frameCount={codes.length}
-          onClose={() => setShowPlayer(false)}
-        />
-      )}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
@@ -274,17 +267,6 @@ export default function WriterPage() {
             )}
 
             <SettingsPanel settings={settings} onChange={setSettings} />
-
-            <div className="flex items-center gap-2 text-[12px] text-gray-400 bg-gray-50 rounded-lg px-3.5 py-2.5 border border-gray-100">
-              <span>🎞</span>
-              <span>
-                GIF at{' '}
-                <span className="text-gray-700 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
-                  {animFps} fps
-                </span>
-                {' '}({settings.cameraFps} fps camera, halved for reliability)
-              </span>
-            </div>
 
             {error && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl px-4 py-3">
@@ -344,7 +326,7 @@ export default function WriterPage() {
 
                 <div className="grid grid-cols-3 divide-x divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                   <Stat label="Frames" value={codes.length} />
-                  <Stat label="Speed" value={`${animFps} fps`} />
+                  <Stat label="Speed" value={`${playerFps} fps`} />
                   <Stat
                     label="Per frame"
                     value={settings.chunkSize >= 1024
@@ -363,11 +345,9 @@ export default function WriterPage() {
                       active:scale-[0.99]"
                   >
                     {gifBuilding ? (
-                      <><span className="animate-spin">⏳</span> Building GIF... {gifProgress}%</>
-                    ) : gifUrl ? (
-                      <>▶ Play GIF</>
+                      <>⏳ Building GIF... {gifProgress}%</>
                     ) : (
-                      <>🎞 Build &amp; Play GIF</>
+                      <>↓ Download GIF</>
                     )}
                   </button>
 
@@ -380,6 +360,8 @@ export default function WriterPage() {
                     ↓ Download ZIP
                   </button>
                 </div>
+
+                <FramePlayer rawPngs={rawPngs} fps={playerFps} setFps={setPlayerFps} />
 
                 {gifBuilding && (
                   <div className="space-y-1.5">
