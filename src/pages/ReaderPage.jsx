@@ -211,15 +211,39 @@ export default function ReaderPage() {
         canvas.getContext('2d').drawImage(video, 0, 0, w, h)
 
         const hash = quickHash(canvas.getContext('2d').getImageData(0, 0, 8, 8))
+
         if (hash !== lastHashRef.current) {
           lastHashRef.current = hash
 
-          const pngData = await new Promise(res => {
-            canvas.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png')
-          })
+          const midX = Math.floor(canvas.width / 2)
 
-          const raw = decodeImage(pngData)
-          const ok  = processRaw(raw)
+          const processHalf = async (sx, sy, sw, sh) => {
+            const tempCanvas = document.createElement('canvas')
+            tempCanvas.width = sw
+            tempCanvas.height = sh
+
+            const tctx = tempCanvas.getContext('2d')
+            tctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh)
+
+            const pngData = await new Promise(res => {
+              tempCanvas.toBlob(b =>
+                b.arrayBuffer().then(ab => res(new Uint8Array(ab))),
+                'image/png'
+              )
+            })
+
+            try {
+              const raw = decodeImage(pngData)
+              return processRaw(raw)
+            } catch {
+              return false
+            }
+          }
+
+          const okLeft  = await processHalf(0, 0, midX, canvas.height)
+          const okRight = await processHalf(midX, 0, midX, canvas.height)
+
+          const ok = okLeft || okRight
 
           setCameraStatus(ok
             ? `Got frame — ${receivedRef.current.size} / ${totalRef.current ?? '?'}`
