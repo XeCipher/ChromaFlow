@@ -1,7 +1,7 @@
 import { encodeHeader, decodeHeader, HEADER_SIZE } from './header'
 import { getMimeFromId, getExtFromId } from './mime'
 
-// ─── Frame helpers ────────────────────────────────────────────────────────────
+// Frame helpers
 const MAGIC = 'CF1:'
 
 const b64enc = (bytes) => {
@@ -44,7 +44,7 @@ export function parseFrame(raw) {
   }
 }
 
-// ─── Writer — Web Worker based ────────────────────────────────────────────────
+// Writer — Web Worker based
 // Each worker has its own JS scope — no variable conflicts across instances.
 // We terminate and respawn every REINIT_EVERY frames to prevent WASM heap
 // accumulation. The new worker signals 'ready' once WASM is initialized,
@@ -135,7 +135,7 @@ export async function encodeFrame(frameStr, opts = {}) {
   })
 }
 
-// ─── Reader ───────────────────────────────────────────────────────────────────
+// Reader
 let _readerReady = false
 let _output      = ''
 let _decCnt      = 0
