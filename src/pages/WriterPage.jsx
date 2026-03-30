@@ -84,59 +84,115 @@ export default function WriterPage() {
     const results = []
     const pngs    = []
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i += 2) {
       setProgress({ cur: i + 1, total })
       await new Promise(r => setTimeout(r, 0))
 
-      let chunk = chunks[i]
+      // LEFT chunk
+      let leftChunk = chunks[i]
 
+      // RIGHT chunk (optional)
+      let rightChunk = (i + 1 < total) ? chunks[i + 1] : null
+
+      // Inject filename ONLY once (same as before)
       if (i === 0 && inputMode === 'file') {
         const encoder = new TextEncoder()
         const nameBytes = encoder.encode(file.name)
-
         const nameLen = new Uint8Array([nameBytes.length])
 
-        const combined = new Uint8Array(1 + nameBytes.length + chunk.length)
+        const combined = new Uint8Array(1 + nameBytes.length + leftChunk.length)
         combined.set(nameLen, 0)
         combined.set(nameBytes, 1)
-        combined.set(chunk, 1 + nameBytes.length)
+        combined.set(leftChunk, 1 + nameBytes.length)
 
-        chunk = combined
+        leftChunk = combined
       }
 
-      const str = buildFrame({
+      // Build LEFT frame
+      const leftStr = buildFrame({
         mode:       frameMode,
         totalCodes: total,
         codeIndex:  i,
-        chunkBytes: chunk,
+        chunkBytes: leftChunk,
         mimeTypeId: mimeId,
       })
 
-      let png
+      // Build RIGHT frame (if exists)
+      let rightStr = null
+      if (rightChunk) {
+        rightStr = buildFrame({
+          mode:       frameMode,
+          totalCodes: total,
+          codeIndex:  i + 1,
+          chunkBytes: rightChunk,
+          mimeTypeId: mimeId,
+        })
+      }
+
+      // Encode LEFT
+      let leftPng
       try {
-        png = await encodeFrame(str, {
+        leftPng = await encodeFrame(leftStr, {
           colorNumber:  settings.colorNumber,
           moduleSize:   settings.moduleSize,
-          // In adaptive mode these are set to fill the screen
-          // In manual mode these are 0 (JABCode auto-sizes)
-          symbolWidth:  settings.symbolWidth  ?? 0,
+          symbolWidth:  settings.symbolWidth ?? 0,
           symbolHeight: settings.symbolHeight ?? 0,
           eccLevel:     settings.eccLevel,
           chunkSize:    settings.chunkSize,
         })
       } catch (e) {
-        setError(`Frame ${i + 1} failed: ${e.message}. Try reducing chunk size.`)
+        setError(`Frame ${i + 1} failed: ${e.message}`)
         setGenerating(false)
         return
       }
 
-      const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }))
-      results.push({ url, index: i, total, chunkLen: chunks[i].length })
-      pngs.push(png)
+      // Encode RIGHT (if exists)
+      let rightPng = null
+      if (rightStr) {
+        try {
+          rightPng = await encodeFrame(rightStr, {
+            colorNumber:  settings.colorNumber,
+            moduleSize:   settings.moduleSize,
+            symbolWidth:  settings.symbolWidth ?? 0,
+            symbolHeight: settings.symbolHeight ?? 0,
+            eccLevel:     settings.eccLevel,
+            chunkSize:    settings.chunkSize,
+          })
+        } catch (e) {
+          setError(`Frame ${i + 2} failed: ${e.message}`)
+          setGenerating(false)
+          return
+        }
+      }
+
+      // STORE BOTH (IMPORTANT CHANGE)
+      const leftUrl = URL.createObjectURL(new Blob([leftPng], { type: 'image/png' }))
+
+      if (rightPng) {
+        const rightUrl = URL.createObjectURL(new Blob([rightPng], { type: 'image/png' }))
+
+        results.push({
+          left: leftUrl,
+          right: rightUrl,
+          index: i,
+          total
+        })
+
+        pngs.push([leftPng, rightPng])
+      } else {
+        results.push({
+          left: leftUrl,
+          right: null,
+          index: i,
+          total
+        })
+
+        pngs.push([leftPng])
+      }
     }
 
     setCodes(results)
-    setRawPngs(pngs)
+    setRawPngs(pngs.flat())
     setGenerating(false)
   }
 
