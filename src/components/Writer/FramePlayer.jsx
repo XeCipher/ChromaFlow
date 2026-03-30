@@ -85,14 +85,16 @@ export default function FramePlayer({ rawPngs = [], fps, setFps }) {
       >
         {/* Fullscreen Button (anchored to image) */}
         <button
-          onClick={toggleFullscreen}
-          className={`absolute top-2 right-2 z-20 text-xs px-2 py-1 rounded-md border shadow-sm ${
-            isFullscreen
-                ? '!border-white !text-white bg-black/60 hover:bg-black/80'
-                : 'border-gray-300 text-gray-700 bg-white/90 hover:bg-gray-100'
-          }`}
-        >
-          {isFullscreen ? 'Exit' : 'Fullscreen'}
+            onClick={toggleFullscreen}
+            className={`absolute top-2 right-2 z-20 text-xs px-2 py-1 rounded-md border shadow-sm backdrop-blur-sm 
+                ${
+                isFullscreen
+                    ? 'sm:hidden !border-white !text-white bg-black/60 hover:bg-black/80'
+                    : 'border-gray-300 text-gray-700 bg-white/90 hover:bg-gray-100'
+                }
+            `}
+            >
+            {isFullscreen ? 'Exit' : 'Fullscreen'}
         </button>
 
         <img
