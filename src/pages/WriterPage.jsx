@@ -97,8 +97,6 @@ export default function WriterPage() {
         png = await encodeFrame(str, {
           colorNumber:  settings.colorNumber,
           moduleSize:   settings.moduleSize,
-          // In adaptive mode these are set to fill the screen
-          // In manual mode these are 0 (JABCode auto-sizes)
           symbolWidth:  settings.symbolWidth  ?? 0,
           symbolHeight: settings.symbolHeight ?? 0,
           eccLevel:     settings.eccLevel,
@@ -111,12 +109,11 @@ export default function WriterPage() {
       }
 
       const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }))
-      results.push({ url, index: i, total, chunkLen: chunks[i].length })
-      pngs.push(png)
+      
+      setCodes(prev => [...prev, { url, index: i, total, chunkLen: chunks[i].length }])
+      setRawPngs(prev => [...prev, png])
     }
 
-    setCodes(results)
-    setRawPngs(pngs)
     setGenerating(false)
   }
 
@@ -318,7 +315,7 @@ export default function WriterPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={buildGif}
-                    disabled={gifBuilding}
+                    disabled={gifBuilding || generating}
                     className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-700
                       text-white text-[13px] font-semibold rounded-xl transition-all
                       disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed
@@ -333,6 +330,7 @@ export default function WriterPage() {
 
                   <button
                     onClick={downloadZip}
+                    disabled={generating}
                     className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200
                       rounded-xl text-[13px] font-medium text-gray-600
                       hover:border-gray-400 hover:text-gray-900 transition-all"
