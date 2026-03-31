@@ -112,7 +112,7 @@ export default function ReaderPage() {
     try { pngData = await fileToPng(file) }
     catch { setScanError('Could not read image.'); return }
 
-    const raw = decodeImage(pngData)
+    const raw = await decodeImage(pngData)
     processRaw(raw, imgUrl)
   }
 
@@ -190,7 +190,7 @@ export default function ReaderPage() {
             canvas.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png')
           })
 
-          const raw = decodeImage(pngData)
+          const raw = await decodeImage(pngData)
           const ok  = processRaw(raw)
 
           setCameraStatus(ok

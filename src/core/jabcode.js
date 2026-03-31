@@ -121,51 +121,54 @@ export async function encodeFrame(frameStr, opts = {}) {
   })
 }
 
-// Reader
-let _readerReady = false
-let _output      = ''
-let _decCnt      = 0
+// Reader — Web Worker based
+let _readerWorker = null
+let _readerFrameCount = 0
+let _decCnt = 0
+let _readerOutput = ''
 
-export function loadReader() {
-  if (_readerReady) return Promise.resolve()
-
-  if (document.querySelector('script[src="/assets/jabcodeReader.js"]')) {
-    return new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (window.callMain && window.FS) {
-          clearInterval(check)
-          _readerReady = true
-          resolve()
-        }
-      }, 50)
-    })
-  }
-
-  return new Promise((resolve, reject) => {
-    window.Module = {
-      print(t) { _output += (_output ? '\n' : '') + t },
-      printErr: (t) => console.warn('[reader err]', t),
-      onRuntimeInitialized() { _readerReady = true; resolve() },
+function spawnReaderWorker() {
+  if (_readerWorker) _readerWorker.terminate()
+  _readerOutput = ''
+  _readerFrameCount = 0
+  
+  return new Promise((resolve) => {
+    const worker = new Worker('/decoder.worker.js')
+    worker.onmessage = (e) => {
+      if (e.data.type === 'ready') {
+        _readerWorker = worker
+        resolve()
+      } else if (e.data.type === 'stdout') {
+        _readerOutput += ( _readerOutput ? '\n' : '') + e.data.text
+      }
     }
-    const s   = document.createElement('script')
-    s.src     = '/assets/jabcodeReader.js'
-    s.onerror = () => reject(new Error('Failed to load jabcodeReader.js'))
-    document.head.appendChild(s)
   })
 }
 
-export function decodeImage(pngData) {
-  if (!_readerReady) throw new Error('Reader not ready')
+export async function loadReader() {
+  await spawnReaderWorker()
+}
+
+export async function decodeImage(pngData) {
+  // Respawn worker every 20 frames to clear WASM memory
+  if (!_readerWorker || _readerFrameCount >= 20) {
+    await spawnReaderWorker()
+  }
 
   _decCnt++
-  const name = `_r${_decCnt}.png`
-  window.FS.writeFile(name, pngData)
-  _output = ''
+  _readerFrameCount++
+  _readerOutput = ''
+  const id = _decCnt
 
-  try { window.callMain([name]) } catch (_) { /* decode miss — normal */ }
-
-  window.FS.unlink(name)
-
-  const lines = _output.trim().split('\n').filter(Boolean)
-  return lines.at(-1) ?? ''
+  return new Promise((resolve) => {
+    const onMessage = (e) => {
+      if (e.data.type !== 'done' || e.data.id !== id) return
+      _readerWorker.removeEventListener('message', onMessage)
+      
+      const lines = _readerOutput.trim().split('\n').filter(Boolean)
+      resolve(lines.at(-1) ?? '')
+    }
+    _readerWorker.addEventListener('message', onMessage)
+    _readerWorker.postMessage({ pngData, id }, [pngData.buffer])
+  })
 }

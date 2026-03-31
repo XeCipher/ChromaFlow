@@ -51,8 +51,6 @@ export default function WriterPage() {
       .catch((e) => setError('Encoder failed to load: ' + e.message))
   }, [])
 
-  const animFps = Math.max(1, Math.floor(settings.cameraFps / 2))
-
   const generate = async () => {
     setError('')
     setCodes([])
