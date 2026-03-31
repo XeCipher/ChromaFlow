@@ -1,5 +1,4 @@
-import { encodeHeader, decodeHeader, HEADER_SIZE } from './header'
-import { getMimeFromId, getExtFromId } from './mime'
+import { buildBinaryHeader, parseBinaryHeader } from './header'
 
 // Frame helpers
 const MAGIC = 'CF1:'
@@ -17,12 +16,9 @@ const b64dec = (str) => {
   return out
 }
 
-export function buildFrame({ mode, totalCodes, codeIndex, chunkBytes, mimeTypeId }) {
-  const hdr   = encodeHeader({ mode, totalCodes, codeIndex, chunkLength: chunkBytes.length, mimeTypeId })
-  const frame = new Uint8Array(HEADER_SIZE + chunkBytes.length)
-  frame.set(hdr, 0)
-  frame.set(chunkBytes, HEADER_SIZE)
-  return MAGIC + b64enc(frame)
+export function buildFrame(isInitial, totalCodes, codeIndex, payloadBytes, filename) {
+  const binaryFrame = buildBinaryHeader(isInitial, totalCodes, codeIndex, payloadBytes, filename)
+  return MAGIC + b64enc(binaryFrame)
 }
 
 export function parseFrame(raw) {
@@ -30,18 +26,8 @@ export function parseFrame(raw) {
 
   let bytes
   try { bytes = b64dec(raw.slice(MAGIC.length)) } catch { return null }
-  if (bytes.length < HEADER_SIZE) return null
-
-  let hdr
-  try { hdr = decodeHeader(bytes) } catch { return null }
-
-  const payload = bytes.slice(HEADER_SIZE, HEADER_SIZE + hdr.chunkLength)
-  return {
-    ...hdr,
-    payload,
-    mime: getMimeFromId(hdr.mimeTypeId),
-    ext:  getExtFromId(hdr.mimeTypeId),
-  }
+  
+  return parseBinaryHeader(bytes)
 }
 
 // Writer — Web Worker based
