@@ -7,8 +7,6 @@ import SettingsPanel from '../components/Writer/SettingsPanel'
 import FramePlayer from '../components/Writer/FramePlayer'
 import { loadWriter, encodeFrame, buildFrame, resetFrameCount } from '../core/jabcode'
 import { chunkBytes } from '../core/chunker'
-import { getIdFromFilename } from '../core/mime'
-import { MODE } from '../core/header'
 
 const DEFAULTS = {
   cameraFps:    30,
@@ -61,18 +59,16 @@ export default function WriterPage() {
     setRawPngs([])
     resetFrameCount()
 
-    let payload, mimeId, frameMode
+    let payload, filename
 
     if (inputMode === 'text') {
       if (!text.trim()) return setError('Enter some text first.')
       payload   = new TextEncoder().encode(text.trim())
-      mimeId    = 0x0001
-      frameMode = MODE.TEXT
+      filename  = null
     } else {
       if (!file) return setError('Pick a file first.')
       payload   = new Uint8Array(await file.arrayBuffer())
-      mimeId    = getIdFromFilename(file.name)
-      frameMode = MODE.BINARY
+      filename  = file.name
     }
 
     const chunks = chunkBytes(payload, settings.chunkSize)
@@ -88,29 +84,13 @@ export default function WriterPage() {
       setProgress({ cur: i + 1, total })
       await new Promise(r => setTimeout(r, 0))
 
-      let chunk = chunks[i]
-
-      if (i === 0 && inputMode === 'file') {
-        const encoder = new TextEncoder()
-        const nameBytes = encoder.encode(file.name)
-
-        const nameLen = new Uint8Array([nameBytes.length])
-
-        const combined = new Uint8Array(1 + nameBytes.length + chunk.length)
-        combined.set(nameLen, 0)
-        combined.set(nameBytes, 1)
-        combined.set(chunk, 1 + nameBytes.length)
-
-        chunk = combined
-      }
-
-      const str = buildFrame({
-        mode:       frameMode,
-        totalCodes: total,
-        codeIndex:  i,
-        chunkBytes: chunk,
-        mimeTypeId: mimeId,
-      })
+      const str = buildFrame(
+        i === 0,
+        total,
+        i,
+        chunks[i],
+        filename
+      )
 
       let png
       try {
