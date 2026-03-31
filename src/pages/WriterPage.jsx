@@ -33,7 +33,7 @@ function Stat({ label, value }) {
 export default function WriterPage() {
   const [inputMode, setInputMode]     = useState('text')
   const [text, setText]               = useState('')
-  const [file, setFile]               = useState(null)
+  const [files, setFiles] = useState([])
   const [settings, setSettings]       = useState(DEFAULTS)
   const [wasmReady, setWasmReady]     = useState(false)
   const [generating, setGenerating]   = useState(false)
@@ -66,9 +66,31 @@ export default function WriterPage() {
       payload   = new TextEncoder().encode(text.trim())
       filename  = null
     } else {
-      if (!file) return setError('Pick a file first.')
-      payload   = new Uint8Array(await file.arrayBuffer())
-      filename  = file.name
+      if (files.length === 0) return setError('Pick at least one file.')
+      
+      if (files.length === 1) {
+        // Single file: encode directly
+        payload  = new Uint8Array(await files[0].arrayBuffer())
+        filename = files[0].name
+      } else {
+        // Multiple files: bundle into ZIP
+        setGenerating(true)
+        setError('Zipping files...')
+        try {
+          const zip = new JSZip()
+          for (const f of files) {
+            zip.file(f.name, f)
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' })
+          payload  = new Uint8Array(await zipBlob.arrayBuffer())
+          filename = 'chromaflow_bundle.zip'
+          setError('')
+        } catch (err) {
+          setError('Failed to zip files: ' + err.message)
+          setGenerating(false)
+          return
+        }
+      }
     }
 
     const chunks = chunkBytes(payload, settings.chunkSize)
@@ -76,9 +98,6 @@ export default function WriterPage() {
 
     setGenerating(true)
     setProgress({ cur: 0, total })
-
-    const results = []
-    const pngs    = []
 
     for (let i = 0; i < total; i++) {
       setProgress({ cur: i + 1, total })
@@ -240,7 +259,7 @@ export default function WriterPage() {
                 )}
               </div>
             ) : (
-              <FileDropZone onFile={setFile} file={file} />
+              <FileDropZone onFiles={setFiles} files={files} />
             )}
 
             <SettingsPanel settings={settings} onChange={setSettings} />

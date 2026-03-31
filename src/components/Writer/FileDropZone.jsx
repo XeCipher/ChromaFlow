@@ -1,58 +1,52 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 
-const fmtSize = (b) => {
-  if (b < 1024)    return `${b} B`
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
-  return `${(b / 1048576).toFixed(2)} MB`
-}
+export default function FileDropZone({ onFiles, files }) {
+  const inputRef = useRef(null)
 
-export default function FileDropZone({ onFile, file }) {
-  const [dragging, setDragging] = useState(false)
-  const ref = useRef(null)
+  const handleDrop = (e) => {
+    e.preventDefault()
+    if (e.dataTransfer.files?.length) {
+      onFiles(Array.from(e.dataTransfer.files))
+    }
+  }
+
+  const handleChange = (e) => {
+    if (e.target.files?.length) {
+      onFiles(Array.from(e.target.files))
+    }
+  }
 
   return (
-    <div
-      onClick={() => ref.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragging(false)
-        const f = e.dataTransfer.files[0]
-        if (f) onFile(f)
-      }}
-      className={`
-        relative rounded-xl border-[1.5px] border-dashed p-8
-        text-center cursor-pointer select-none transition-all duration-200
-        ${dragging
-          ? 'border-blue-400 bg-blue-50'
-          : file
-          ? 'border-emerald-300 bg-emerald-50'
-          : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50/80 bg-gray-50/40'
-        }
-      `}
-    >
-      <input
-        ref={ref}
-        type="file"
-        className="hidden"
-        onChange={(e) => { if (e.target.files[0]) onFile(e.target.files[0]) }}
-      />
+    <div>
+      <div
+        className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+        onClick={() => inputRef.current?.click()}
+      >
+        <div className="text-3xl mb-2 opacity-60">📁</div>
+        <p className="text-[13px] font-medium text-gray-600">
+          Click to choose files, or drag & drop
+        </p>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleChange}
+        />
+      </div>
 
-      {file ? (
-        <div className="space-y-1.5">
-          <div className="text-2xl">📄</div>
-          <p className="text-[13px] font-semibold text-emerald-700 truncate px-4" style={{ fontFamily: 'var(--font-mono)' }}>
-            {file.name}
+      {files && files.length > 0 && (
+        <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3">
+          <p className="text-[12px] font-semibold text-gray-700 mb-1">
+            {files.length} file{files.length > 1 ? 's' : ''} selected
           </p>
-          <p className="text-xs text-emerald-500">{fmtSize(file.size)}</p>
-          <p className="text-[11px] text-gray-400 pt-1">click to change</p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          <div className="text-2xl">📂</div>
-          <p className="text-[13px] font-medium text-gray-700">Drop a file here</p>
-          <p className="text-xs text-gray-400">or click to browse — any format</p>
+          <ul className="text-[11px] text-gray-500 max-h-24 overflow-y-auto space-y-1" style={{ fontFamily: 'var(--font-mono)' }}>
+            {files.map((f, i) => (
+              <li key={i} className="truncate">{f.name} ({(f.size / 1024).toFixed(1)} KB)</li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
