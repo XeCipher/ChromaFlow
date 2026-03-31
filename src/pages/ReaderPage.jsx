@@ -3,8 +3,6 @@ import Navbar from '../components/shared/Navbar'
 import SlotGrid from '../components/Reader/SlotGrid'
 import ResultView from '../components/Reader/ResultView'
 import { loadReader, decodeImage, parseFrame } from '../core/jabcode'
-import { MODE } from '../core/header'
-import { getMimeFromId, getExtFromId } from '../core/mime'
 
 function fileToPng(file) {
   return new Promise((resolve, reject) => {
@@ -33,19 +31,18 @@ function quickHash(imageData) {
 }
 
 export default function ReaderPage() {
-  const [wasmReady, setWasmReady]     = useState(false)
-  const [wasmError, setWasmError]     = useState('')
-  const [totalCodes, setTotalCodes]   = useState(null)
-  const [received, setReceived]       = useState(new Map())
-  const [sessionMode, setSessionMode] = useState(null)
-  const [result, setResult]           = useState(null)
-  const [lastScan, setLastScan]       = useState(null)
-  const [scanError, setScanError]     = useState('')
-  const [cameraOn, setCameraOn]       = useState(false)
-  const [cameraStatus, setCameraStatus] = useState('')
-  const [fileMime, setFileMime] = useState('application/octet-stream')
-  const [fileExt,  setFileExt]  = useState('bin')
-  const [detectedFps, setDetectedFps] = useState(null)
+  const [wasmReady, setWasmReady]             = useState(false)
+  const [wasmError, setWasmError]             = useState('')
+  const [totalCodes, setTotalCodes]           = useState(null)
+  const [received, setReceived]               = useState(new Map())
+  const [sessionMode, setSessionMode]         = useState(null)
+  const [sessionFilename, setSessionFilename] = useState(null)
+  const [result, setResult]                   = useState(null)
+  const [lastScan, setLastScan]               = useState(null)
+  const [scanError, setScanError]             = useState('')
+  const [cameraOn, setCameraOn]               = useState(false)
+  const [cameraStatus, setCameraStatus]       = useState('')
+  const [detectedFps, setDetectedFps]         = useState(null)
 
   const streamRef     = useRef(null)
   const videoRef      = useRef(null)
@@ -79,29 +76,32 @@ export default function ReaderPage() {
       return false
     }
 
-    const { mode, totalCodes: tc, codeIndex, chunkLength, payload } = frame
+    const { isInitial, filename, index, total, payload } = frame
 
-    if (receivedRef.current.has(codeIndex)) return false
+    if (receivedRef.current.has(index)) return false
 
     setReceived(prev => {
       const next = new Map(prev)
-      next.set(codeIndex, payload)
+      next.set(index, payload)
       return next
     })
 
     if (totalRef.current === null) {
-      setTotalCodes(tc)
-      setSessionMode(mode === MODE.TEXT ? 'text' : 'binary')
-      setFileMime(frame.mime)
-      setFileExt(frame.ext)
+      setTotalCodes(total)
+      setSessionMode(filename ? 'binary' : 'text')
+      if (filename) setSessionFilename(filename)
+    } else if (isInitial && filename && sessionFilename === null) {
+      // Catch filename if frame 0 arrives late
+      setSessionMode('binary')
+      setSessionFilename(filename)
     }
 
     if (imgUrl) {
-      setLastScan({ imgUrl, index: codeIndex, total: tc, chunkLen: chunkLength })
+      setLastScan({ imgUrl, index, total, chunkLen: payload.length })
     }
 
     return true
-  }, [])
+  }, [sessionFilename])
 
   const onFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -132,33 +132,19 @@ export default function ReaderPage() {
       offset += received.get(i).length
     }
 
-    let actualData = full
-    let extractedFileName = null
-
-    if (sessionMode === 'binary') {
-      const nameLen = full[0]
-
-      if (nameLen > 0 && nameLen < 100) {
-        const nameBytes = full.slice(1, 1 + nameLen)
-        extractedFileName = new TextDecoder().decode(nameBytes)
-
-        actualData = full.slice(1 + nameLen)
-      }
-    }
-
     if (sessionMode === 'text') {
       setResult({ type: 'text', text: new TextDecoder('utf-8').decode(full) })
     } else {
-      const blob = new Blob([actualData], { type: fileMime })
+      const blob = new Blob([full], { type: 'application/octet-stream' })
 
       setResult({
         type: 'binary',
         blob,
-        filename: extractedFileName || `reconstructed_file.${fileExt}`,
-        size: actualData.length
+        filename: sessionFilename || 'reconstructed_file.bin',
+        size: full.length
       })
     }
-  }, [allDone])
+  }, [allDone, result, received, totalCodes, sessionMode, sessionFilename])
 
   const startCamera = async () => {
     if (rafRef.current) {
@@ -258,11 +244,10 @@ export default function ReaderPage() {
     receivedRef.current = new Map()
     totalRef.current    = null
     setSessionMode(null)
+    setSessionFilename(null)
     setResult(null)
     setLastScan(null)
     setScanError('')
-    setFileMime('application/octet-stream')
-    setFileExt('bin')
     setDetectedFps(null)
   }
 
