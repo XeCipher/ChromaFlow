@@ -42,7 +42,6 @@ export default function ReaderPage() {
   const [scanError, setScanError]             = useState('')
   const [cameraOn, setCameraOn]               = useState(false)
   const [cameraStatus, setCameraStatus]       = useState('')
-  const [detectedFps, setDetectedFps]         = useState(null)
 
   const streamRef     = useRef(null)
   const videoRef      = useRef(null)
@@ -164,10 +163,6 @@ export default function ReaderPage() {
       setCameraOn(true)
       setCameraStatus('Scanning...')
 
-      const track      = stream.getVideoTracks()[0]
-      const detectedFps = track.getSettings().frameRate
-      if (detectedFps) setDetectedFps(Math.round(detectedFps))
-
       const targetInterval = 1000 / 30  // 30 FPS scanning
 
       const scanLoop = async (timestamp) => {
@@ -248,7 +243,6 @@ export default function ReaderPage() {
     setResult(null)
     setLastScan(null)
     setScanError('')
-    setDetectedFps(null)
   }
 
   const missing = totalCodes
@@ -336,18 +330,6 @@ export default function ReaderPage() {
                 {cameraStatus}
               </div>
             </div>
-
-            {detectedFps && (
-              <div className="flex items-center gap-2 text-[12px] bg-blue-50 border border-blue-100 text-blue-600 rounded-lg px-3.5 py-2.5">
-                <span>📷</span>
-                <span>
-                  <span className="font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
-                    {detectedFps} fps
-                  </span>
-                  {' '}detected — set sender Camera FPS to {detectedFps}
-                </span>
-              </div>
-            )}
 
             {scanError && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl px-4 py-3">
