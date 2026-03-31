@@ -87,12 +87,11 @@ export default function ReaderPage() {
 
     if (totalRef.current === null) {
       setTotalCodes(total)
+    }
+
+    if (isInitial) {
       setSessionMode(filename ? 'binary' : 'text')
       if (filename) setSessionFilename(filename)
-    } else if (isInitial && filename && sessionFilename === null) {
-      // Catch filename if frame 0 arrives late
-      setSessionMode('binary')
-      setSessionFilename(filename)
     }
 
     if (imgUrl) {
@@ -100,7 +99,7 @@ export default function ReaderPage() {
     }
 
     return true
-  }, [sessionFilename])
+  }, [])
 
   const onFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -163,21 +162,12 @@ export default function ReaderPage() {
       setCameraOn(true)
       setCameraStatus('Scanning...')
 
-      const targetInterval = 1000 / 30  // 30 FPS scanning
-
-      const scanLoop = async (timestamp) => {
+      const scanLoop = async () => {
         const video = videoRef.current
         if (!video || video.readyState < 2) {
           rafRef.current = requestAnimationFrame(scanLoop)
           return
         }
-
-        if (timestamp - lastScanTime.current < targetInterval) {
-          rafRef.current = requestAnimationFrame(scanLoop)
-          return
-        }
-
-        lastScanTime.current = timestamp
 
         const w = video.videoWidth
         const h = video.videoHeight
@@ -189,9 +179,10 @@ export default function ReaderPage() {
         const canvas  = document.createElement('canvas')
         canvas.width  = w
         canvas.height = h
-        canvas.getContext('2d').drawImage(video, 0, 0, w, h)
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, w, h)
 
-        const hash = quickHash(canvas.getContext('2d').getImageData(0, 0, 8, 8))
+        const hash = quickHash(ctx.getImageData(0, 0, 8, 8))
         if (hash !== lastHashRef.current) {
           lastHashRef.current = hash
 
