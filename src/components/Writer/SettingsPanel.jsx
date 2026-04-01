@@ -38,8 +38,8 @@ export default function SettingsPanel({ settings, onChange }) {
   const [open, setOpen]         = useState(false)
   const [autoFit, setAutoFit]   = useState(true)
   const [profile, setProfile]   = useState(null)
-  const [grid, setGrid]         = useState(null)   // { modulesX, modulesY, symbolW, symbolH, totalMods }
-  const [capacity, setCapacity] = useState(null)   // estimated bytes per frame
+  const [grid, setGrid]         = useState(null)
+  const [capacity, setCapacity] = useState(null)
 
   const set = (k, v) => onChange(prev => ({ ...prev, [k]: v }))
 
@@ -53,7 +53,6 @@ export default function SettingsPanel({ settings, onChange }) {
     setGrid(g)
 
     const cap = estimateCapacity(g.symbolW, g.symbolH, MIN_MODULE_SIZE, settings.colorNumber, settings.eccLevel)
-
     setCapacity(cap)
 
     onChange(prev => ({
@@ -65,7 +64,7 @@ export default function SettingsPanel({ settings, onChange }) {
         chunkSize:    cap,
         autoFit:      true,
     }))
-  }, [autoFit, settings.colorNumber, open])
+  }, [autoFit, settings.colorNumber, open, onChange, settings.eccLevel])
 
   const handleAutoToggle = (checked) => {
     setAutoFit(checked)
@@ -101,9 +100,7 @@ export default function SettingsPanel({ settings, onChange }) {
       {open && (
         <div className="border-t border-gray-100 px-4 pt-4 pb-5 bg-gray-50/40 space-y-4">
 
-          {/* ── Display adaptive ─────────────────────────────────── */}
           <div className="rounded-xl border border-gray-200 overflow-hidden">
-
             <div className="flex items-center justify-between px-4 py-3 bg-white">
               <div>
                 <p className="text-[13px] font-semibold text-gray-700">
@@ -125,7 +122,6 @@ export default function SettingsPanel({ settings, onChange }) {
               </button>
             </div>
 
-            {/* Live readout */}
             {autoFit && profile && grid && (
               <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-2">
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
@@ -172,23 +168,11 @@ export default function SettingsPanel({ settings, onChange }) {
                     <span className="text-blue-600 font-semibold">{fmtBytes(capacity)} / frame</span>
                   </div>
                 </div>
-
-                {/* Comparison callout */}
-                <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-                  <p className="text-[11px] text-blue-600 leading-relaxed">
-                    <span className="font-semibold">{grid.modulesX * grid.modulesY} modules</span> vs ~1,024 in fixed mode
-                    {' '}— <span className="font-semibold">
-                      {Math.round((grid.totalMods / 1024))}× more data per frame
-                    </span>
-                  </p>
-                </div>
               </div>
             )}
           </div>
 
-          {/* ── Other settings ───────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
             <Field label="Color Depth" hint="More colours = more data per frame">
               <select
                 className={inputCls}
@@ -243,8 +227,20 @@ export default function SettingsPanel({ settings, onChange }) {
                 />
               )}
             </Field>
-
           </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <Field label="Target Frames (Optional)" hint="e.g. '1, 5, 12'. Leave blank to generate all.">
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="All frames"
+                value={settings.targetFrames}
+                onChange={(e) => set('targetFrames', e.target.value)}
+              />
+            </Field>
+          </div>
+
         </div>
       )}
     </div>

@@ -33,7 +33,7 @@ function Stat({ label, value }) {
 export default function WriterPage() {
   const [inputMode, setInputMode]     = useState('text')
   const [text, setText]               = useState('')
-  const [files, setFiles] = useState([])
+  const [files, setFiles]             = useState([])
   const [settings, setSettings]       = useState(DEFAULTS)
   const [wasmReady, setWasmReady]     = useState(false)
   const [generating, setGenerating]   = useState(false)
@@ -43,7 +43,8 @@ export default function WriterPage() {
   const [error, setError]             = useState('')
   const [gifBuilding, setGifBuilding] = useState(false)
   const [gifProgress, setGifProgress] = useState(0)
-  const [playerFps, setPlayerFps] = useState(15)
+  const [playerFps, setPlayerFps]     = useState(15)
+  const [missingFrames, setMissingFrames] = useState('')
 
   useEffect(() => {
     loadWriter()
@@ -55,6 +56,7 @@ export default function WriterPage() {
     setError('')
     setCodes([])
     setRawPngs([])
+    setMissingFrames('')
     resetFrameCount()
 
     let payload, filename
@@ -67,11 +69,9 @@ export default function WriterPage() {
       if (files.length === 0) return setError('Pick at least one file.')
       
       if (files.length === 1) {
-        // Single file: encode directly
         payload  = new Uint8Array(await files[0].arrayBuffer())
         filename = files[0].name
       } else {
-        // Multiple files: bundle into ZIP
         setGenerating(true)
         setError('Zipping files...')
         try {
@@ -97,6 +97,9 @@ export default function WriterPage() {
     setGenerating(true)
     setProgress({ cur: 0, total })
 
+    const results = []
+    const pngs    = []
+
     for (let i = 0; i < total; i++) {
       setProgress({ cur: i + 1, total })
       await new Promise(r => setTimeout(r, 0))
@@ -114,8 +117,8 @@ export default function WriterPage() {
         png = await encodeFrame(str, {
           colorNumber:  settings.colorNumber,
           moduleSize:   settings.moduleSize,
-          symbolWidth:  settings.symbolWidth  ?? 0,
-          symbolHeight: settings.symbolHeight ?? 0,
+          symbolWidth:  settings.autoFit ? settings.symbolWidth  : 0,
+          symbolHeight: settings.autoFit ? settings.symbolHeight : 0,
           eccLevel:     settings.eccLevel,
           chunkSize:    settings.chunkSize,
         })
@@ -127,17 +130,38 @@ export default function WriterPage() {
 
       const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }))
       
-      setCodes(prev => [...prev, { url, index: i, total, chunkLen: chunks[i].length }])
-      setRawPngs(prev => [...prev, png])
+      results.push({ url, index: i, total, chunkLen: chunks[i].length })
+      pngs.push(png)
+      
+      setCodes([...results])
+      setRawPngs([...pngs])
     }
 
     setGenerating(false)
   }
 
+  let displayCodes = codes
+  let displayPngs  = rawPngs
+
+  if (missingFrames.trim() !== '') {
+    const parsedIndices = missingFrames
+      .split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => !isNaN(n) && n > 0 && n <= codes.length)
+      .map(n => n - 1)
+
+    if (parsedIndices.length > 0) {
+      const targetSet = new Set(parsedIndices)
+      displayCodes = codes.filter((c, i) => targetSet.has(i))
+      displayPngs  = rawPngs.filter((p, i) => targetSet.has(i))
+    }
+  }
+
   const downloadZip = async () => {
     const zip = new JSZip()
-    rawPngs.forEach((png, i) => {
-      zip.file(`jabcode_${String(i).padStart(3, '0')}.png`, png)
+    displayPngs.forEach((png, i) => {
+      const actualIndex = displayCodes[i].index
+      zip.file(`jabcode_${String(actualIndex).padStart(3, '0')}.png`, png)
     })
     const blob = await zip.generateAsync({ type: 'blob' })
     const a    = document.createElement('a')
@@ -147,13 +171,13 @@ export default function WriterPage() {
   }
 
   const buildGif = async () => {
-    if (gifBuilding || rawPngs.length === 0) return
+    if (gifBuilding || displayPngs.length === 0) return
 
     setGifBuilding(true)
     setGifProgress(0)
 
     const bitmaps = await Promise.all(
-      rawPngs.map(png => createImageBitmap(new Blob([png], { type: 'image/png' })))
+      displayPngs.map(png => createImageBitmap(new Blob([png], { type: 'image/png' })))
     )
 
     const w = bitmaps[0].width
@@ -218,7 +242,6 @@ export default function WriterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8 lg:gap-12">
 
-          {/* Config */}
           <div className="space-y-4">
 
             <div className="flex bg-gray-100 rounded-xl p-[3px] gap-[2px]">
@@ -285,7 +308,6 @@ export default function WriterPage() {
 
           </div>
 
-          {/* Output */}
           <div>
 
             {generating && (
@@ -319,14 +341,32 @@ export default function WriterPage() {
               <div className="space-y-5">
 
                 <div className="grid grid-cols-3 divide-x divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                  <Stat label="Frames" value={codes.length} />
-                  <Stat label="Speed" value={`${playerFps} fps`} />
+                  <Stat label="Total Generated" value={codes.length} />
+                  <Stat label="Currently Looping" value={displayCodes.length} />
                   <Stat
                     label="Per frame"
                     value={settings.chunkSize >= 1024
                       ? `${(settings.chunkSize / 1024).toFixed(1)}KB`
                       : `${settings.chunkSize}B`}
                   />
+                </div>
+                
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">
+                      Selective Retransmission
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2, 5, 12 (Leave blank to loop all)"
+                      value={missingFrames}
+                      onChange={(e) => setMissingFrames(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-100 transition-all placeholder:text-gray-400"
+                    />
+                  </div>
+                  <div className="text-[11px] text-gray-500 sm:max-w-[160px] leading-relaxed">
+                    Enter missing frame numbers from the Reader to instantly isolate them in the loop.
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -350,13 +390,19 @@ export default function WriterPage() {
                     disabled={generating}
                     className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200
                       rounded-xl text-[13px] font-medium text-gray-600
-                      hover:border-gray-400 hover:text-gray-900 transition-all"
+                      hover:border-gray-400 hover:text-gray-900 transition-all
+                      disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     ↓ Download ZIP
                   </button>
                 </div>
-
-                <FramePlayer rawPngs={rawPngs} fps={playerFps} setFps={setPlayerFps} />
+                
+                <FramePlayer 
+                  key={missingFrames} 
+                  rawPngs={displayPngs} 
+                  fps={playerFps} 
+                  setFps={setPlayerFps} 
+                />
 
                 {gifBuilding && (
                   <div className="space-y-1.5">
@@ -374,7 +420,7 @@ export default function WriterPage() {
                 )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {codes.map((c) => (
+                  {displayCodes.map((c) => (
                     <div
                       key={c.index}
                       className="rounded-xl border border-gray-100 overflow-hidden
