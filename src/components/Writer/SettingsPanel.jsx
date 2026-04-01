@@ -237,7 +237,7 @@ export default function SettingsPanel({ settings, onChange }) {
                 <input
                   type="number"
                   className={inputCls}
-                  min={64} max={4096}
+                  min={64} max={65535}
                   value={settings.chunkSize}
                   onChange={(e) => set('chunkSize', +e.target.value)}
                 />
