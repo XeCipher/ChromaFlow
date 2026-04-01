@@ -396,16 +396,9 @@ export default function WriterPage() {
                     ↓ Download ZIP
                   </button>
                 </div>
-                
-                <FramePlayer 
-                  key={missingFrames} 
-                  rawPngs={displayPngs} 
-                  fps={playerFps} 
-                  setFps={setPlayerFps} 
-                />
 
                 {gifBuilding && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 mb-4 ">
                     <div className="flex justify-between text-[11px] text-gray-400">
                       <span>Assembling GIF</span>
                       <span style={{ fontFamily: 'var(--font-mono)' }}>{gifProgress}%</span>
@@ -418,6 +411,13 @@ export default function WriterPage() {
                     </div>
                   </div>
                 )}
+                
+                <FramePlayer 
+                  key={missingFrames} 
+                  rawPngs={displayPngs} 
+                  fps={playerFps} 
+                  setFps={setPlayerFps} 
+                />
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {displayCodes.map((c) => (
