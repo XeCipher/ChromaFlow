@@ -1,0 +1,6 @@
+{
+  "appId": "com.xecipher.chromaflow",
+  "appName": "ChromaFlow",
+  "webDir": "dist",
+  "backgroundColor": "#00000000"
+}
